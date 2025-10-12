@@ -1,172 +1,188 @@
 # -*- coding: utf-8 -*-
 """
-Created on Mon Oct  6 10:30:34 2025
+Created on Sat Oct 11 16:10:14 2025
 
 @author: quent
 """
 
-__docformat__ = "reStructuredText"
-
-# Python imports
-import random
-
-# Library imports
-import pygame
-
-# pymunk imports
+import numpy as np
 import pymunk
 import pymunk.pygame_util
+import pygame
+
+import Settings
+import Graphics.GraphicEngine as GE
+import Player.PlayerActions as PActions
+import Engine.Actions as Actions
 
 
-class BouncyBalls(object):
+should_continue = True
+
+def initGame(score=np.zeros(2, dtype=np.uint8)) -> dict:
     """
-    This class implements a simple scene in which there is a static platform (made up of a couple of lines)
-    that don't move. Balls appear occasionally and drop onto the platform. They bounce around.
+    Renvoie le dictionnaire "game" initialisé pour une nouvelle partie et démarre pygame.
+
+    Returns
+    -------
+    dict
+        Dictionnaire "game" contenant les informations de l'espace, la balle, les joueurs etc.
+
     """
+    
+    space = pymunk.Space()
+    space.damping = Settings.GROUND_FRICTION
+    game = {
+        "space": space,
+        "score": score
+        }
+    
+    GE.buildBoard(game)
+    GE.buildBall(game)
+    GE.buildPlayers(game)
+    
+    return game
 
-    def __init__(self) -> None:
-        # Space
-        self._space = pymunk.Space()
-        self._space.gravity = (0.0, 900.0)
+def stopGame() -> None:
+    """
+    Arrête le jeu.
 
-        # Physics
-        # Time step
-        self._dt = 1.0 / 60.0
-        # Number of physics steps per screen frame
-        self._physics_steps_per_frame = 1
+    Returns
+    -------
+    None.
 
-        # pygame
-        pygame.init()
-        self._screen = pygame.display.set_mode((600, 600))
-        self._clock = pygame.time.Clock()
+    """
+    
+    global should_continue
+    should_continue = False
+    pygame.display.quit()
+    pygame.quit()
+    return
 
-        self._draw_options = pymunk.pygame_util.DrawOptions(self._screen)
 
-        # Static barrier walls (lines) that the balls bounce off of
-        self._add_static_scenery()
+def main() -> None:
+    """
+    Boucle de jeu principale.
 
-        # Balls that exist in the world
-        self._balls: list[pymunk.Circle] = []
+    Returns
+    -------
+    None.
 
-        # Execution control and time until the next ball spawns
-        self._running = True
-        self._ticks_to_next_ball = 10
-
-    def run(self) -> None:
-        """
-        The main loop of the game.
-        :return: None
-        """
-        # Main loop
-        while self._running:
-            # Progress time forward
-            for x in range(self._physics_steps_per_frame):
-                self._space.step(self._dt)
-
-            self._process_events()
-            self._update_balls()
-            self._clear_screen()
-            self._draw_objects()
-            pygame.display.flip()
-            # Delay fixed time between frames
-            self._clock.tick(50)
-            pygame.display.set_caption("fps: " + str(self._clock.get_fps()))
-        pygame.display.quit()
-        pygame.quit()
-
-    def _add_static_scenery(self) -> None:
-        """
-        Create the static bodies.
-        :return: None
-        """
-        static_body = self._space.static_body
-        static_lines = [
-            pymunk.Segment(static_body, (111.0, 600 - 280), (407.0, 600 - 246), 0.0),
-            pymunk.Segment(static_body, (407.0, 600 - 246), (407.0, 600 - 343), 0.0),
-            pymunk.Segment(static_body, (111.0, 600 - 280), (60, 600 - 343), 0.0),
-        ]
-        for line in static_lines:
-            line.elasticity = 0.95
-            line.friction = 0.9
-        self._space.add(*static_lines)
-
-    def _process_events(self) -> None:
-        """
-        Handle game and events like keyboard input. Call once per frame only.
-        :return: None
-        """
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                self._running = False
-            elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                self._running = False
-            elif event.type == pygame.KEYDOWN and event.key == pygame.K_p:
-                pygame.image.save(self._screen, "bouncing_balls.png")
-            elif event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
-                self._explosion()
-
-    def _explosion(self) -> None:
-        """
-        Flemme
-        """
-        nb = 1000
-        for body in self._space.bodies:
-            body.velocity += (random.randint(nb/10, nb),random.randint(-nb, nb))
+    """
+    
+    pygame.init()
+    game = initGame()
+    screen, draw_options = GE.initScreen()
+    
+    clock = pygame.time.Clock()
+    
+    delta_time = Settings.DELTA_TIME
+    fps = int(1000/delta_time)
+    
+    min_delta_time = 1000/Settings.MAX_FPS
+    
+    time = 0
+    GE.display(game, screen, draw_options)
+    
+    import Engine.Vision as Vision
+    print(Vision.rayTracing(game, game["selected_player"]))
+    return
         
-        return
-
-    def _update_balls(self) -> None:
-        """
-        Create/remove balls as necessary. Call once per frame only.
-        :return: None
-        """
-        self._ticks_to_next_ball -= 1
-        if self._ticks_to_next_ball <= 0:
-            self._create_ball()
-            self._ticks_to_next_ball = 20
-        # Remove balls that fall below 100 vertically
-        balls_to_remove = [ball for ball in self._balls if ball.body.position.y > 500]
-        for ball in balls_to_remove:
-            self._space.remove(ball, ball.body)
-            self._balls.remove(ball)
-
-    def _create_ball(self) -> None:
-        """
-        Create a ball.
-        :return:
-        """
-        mass = 10
-        radius = 25
-        inertia = pymunk.moment_for_circle(mass, 0, radius, (0, 0))
-        body = pymunk.Body(mass, inertia)
-        x = random.randint(115, 350)
-        body.position = x, 200
-        shape = pymunk.Circle(body, radius, (0, 0))
-        shape.elasticity = 0.95
-        shape.friction = 0.9
-        body.velocity = (random.randint(-250, 250),random.randint(-250, 250))
-        self._space.add(body, shape)
-        self._balls.append(shape)
-
-    def _clear_screen(self) -> None:
-        """
-        Clears the screen.
-        :return: None
-        """
-        self._screen.fill(pygame.Color("white"))
-
-    def _draw_objects(self) -> None:
-        """
-        Draw the objects.
-        :return: None
-        """
-        self._space.debug_draw(self._draw_options)
+    while(should_continue):
+        
+        PActions.process_events(game, stopGame)
+        if(should_continue):
+            # Décision de l'ia ?
+            
+            for step in range(delta_time):
+                game["space"].step(0.001)
+            time += delta_time
+            Actions.reset_movements(game)
+            
+            if(time >= min_delta_time):
+                GE.display(game, screen, draw_options)
+                time -= min_delta_time
+            clock.tick(fps)
+            checkIfGoal(game)
+            #TODO: vérifier si un joueur est sorti
+    return
 
 
-def main():
-    game = BouncyBalls()
-    game.run()
+def checkIfGoal(game) -> np.uint8:
+    """
+    Vérifie si un but a été marqué, et par qui. Rstart une manche en conséquence.
+
+    Parameters
+    ----------
+    game : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    np.uint8:
+        0: pas de but
+        1: gauche à marqué
+        2: droite à marqué
+
+    """
+    
+    body, shape = game["ball"]
+    ball_x = body.position[0]
+    dim_x = Settings.DIM_X
+    offset = Settings.SCREEN_OFFSET
+    
+    if(ball_x < offset):
+        # Goal à gauche
+        game["score"][1] += 1
+        
+        new_game = initGame(game["score"])
+        game.update(new_game)
+        
+        print("Les joueurs à droite ont marqué !")
+        return np.uint8(2)
+    
+    elif(ball_x > dim_x+offset):
+        # Goal à droite
+        game["score"][0] += 1
+        
+        new_game = initGame(game["score"])
+        game.update(new_game)
+        
+        print("Les joueurs à gauche ont marqué !")
+        return np.uint8(1)
+    
+    else:
+        return np.uint8(0)
 
 
-if __name__ == "__main__":
-    main()
+main()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
