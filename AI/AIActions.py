@@ -12,7 +12,7 @@ import Engine.Actions as Actions
 import Settings
 
 
-def play(game: dict, player: tuple) -> None:
+def play(game: dict, player: tuple, vision: np.array = None) -> np.array:
     """
     Execute one AI action for a given player based on its vision and a decision array.
 
@@ -25,12 +25,13 @@ def play(game: dict, player: tuple) -> None:
 
     Returns
     -------
-    None
-        Actions are applied directly to the player's body and the ball.
+    decision_array : np.array
+        Returns the output vector of the AI.
     """
     
-    # Get the AI vision of the environment
-    vision = Vision.getVision(game, player)
+    # Get the AI vision of the environment if not passed (graphic simulation)
+    if(vision == None):
+        vision = Vision.getVision(game, player)
     
     # TODO replace with actual AI decision logic
     decision_array = random_play(game, player)  
@@ -61,7 +62,7 @@ def play(game: dict, player: tuple) -> None:
         # Shoot
         Actions.shoot(player, game["ball"], power=decision_array[7])
     
-    return
+    return decision_array
 
 def random_play(game: dict, player: tuple) -> np.ndarray:
     """

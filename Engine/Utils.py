@@ -10,7 +10,7 @@ import numpy as np
 import Settings
 
 
-def checkIfGoal(game: dict, initGame: callable) -> np.uint8:
+def checkIfGoal(game: dict, initGame: callable) -> tuple[bool,bool]:
     """
     Checks if a goal has been scored and by which team.  
     If a goal is detected, resets the round by reinitializing the game state.
@@ -24,10 +24,10 @@ def checkIfGoal(game: dict, initGame: callable) -> np.uint8:
 
     Returns
     -------
-    np.uint8
-        0 : no goal
-        1 : left team scored
-        2 : right team scored
+    bool
+        True if a goal was scored, false otherwise.
+    bool
+        True if left team scored, False if right team scored, None otherwise.
     """
     
     body, shape = game["ball"]
@@ -40,18 +40,16 @@ def checkIfGoal(game: dict, initGame: callable) -> np.uint8:
         game["score"][1] += 1
         new_game = initGame(game["score"])
         game.update(new_game)
-        print("Right team scored!")
-        return np.uint8(2)
+        return (True, False)
     
     elif ball_x > dim_x + offset:
         # Goal scored by left team
         game["score"][0] += 1
         new_game = initGame(game["score"])
         game.update(new_game)
-        print("Left team scored!")
-        return np.uint8(1)
+        return (True, True)
     
-    return np.uint8(0)
+    return (False, None)
 
 
 def checkPlayersOut(players: list[tuple]) -> None:

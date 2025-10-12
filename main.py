@@ -9,6 +9,8 @@ import numpy as np
 import pymunk
 import pymunk.pygame_util
 import pygame
+from typing import Callable
+import torch
 
 import Settings
 import Graphics.GraphicEngine as GE
@@ -16,6 +18,8 @@ import Player.PlayerActions as PActions
 import AI.AIActions as AIActions
 import Engine.Actions as Actions
 import Engine.Utils as Utils
+import Engine.Vision as Vision
+import AI.Network as nn
 
 
 should_continue = True
@@ -25,12 +29,12 @@ def initGame(score : np.array = np.zeros(2, dtype=np.uint8)) -> dict:
     Initiate a new game from a given score, and return the dict "game".
     
     Parameters
-    ----------
+   -------
     score : np.ndarray, shape (2,), dtype=np.uint8, optional
         Score array. Default is np.zeros(2, dtype=np.uint8).
     
     Returns
-    -------
+   ----
     dict
         A dictionary containing:
         
@@ -80,7 +84,7 @@ def stopGame() -> None:
     Stop the current game and close all active windows.
 
     Returns
-    -------
+   ----
     None
         This function does not return any value.
     """
@@ -100,7 +104,7 @@ def main() -> None:
     and game state checks such as goals or out-of-bound players.
 
     Returns
-    -------
+   ----
     None
         This function does not return any value.
     """
@@ -130,7 +134,7 @@ def main() -> None:
                 if player != human_player:
                     AIActions.play(game, player) # AI Actions
             
-            for step in range(delta_time): # Necessary to limit "teleportation" issues
+            for step in range(delta_time): # Necessary to avoid tunneling
                 game["space"].step(0.001) # 1 ms at a time
                 
             time += delta_time
@@ -146,8 +150,169 @@ def main() -> None:
     return
 
 
-main()
+def compute_reward(game, player, scored) -> float:
+    """
+    Compute the reward for a given player based on the current game state.
+    
+    Parameters
+   -------
+    game : dict
+        Current game state.
+    player : tuple(pymunk.Body, pymunk.Shape)
+        The player to compute reward for.
+    scored : tuple[bool,bool]
+        (has_scored, left_team_scored)
+    
+    Returns
+   ----
+    float
+        The reward value for this player at this timestep.
+    """
+    body, shape = player
+    ball_body, ball_shape = game["ball"]
+    has_scored, left_team_scored = scored
+    
+    reward = 0.0
+    
+    # Distance to opponent goal
+    if shape.left_team:
+        reward += (ball_body.position[0] - body.position[0]) / Settings.DIM_X
+    else:
+        reward += (body.position[0] - ball_body.position[0]) / Settings.DIM_X
+    
+    # Penalize for being out of bounds
+    x, y = body.position
+    offset = Settings.SCREEN_OFFSET
+    if x < offset or x > Settings.DIM_X + offset:
+        reward -= 10
+    
+    # Scoring
+    if(has_scored):
+        # goal
+        if shape.left_team and left_team_scored:
+            reward += 100
+        elif (not shape.left_team) and (not left_team_scored):
+            reward += 100
+        else:
+            reward -= 100
+    
+    return reward
 
+
+def simulate_episode(
+    max_steps: int,
+    scoring_function: Callable[[dict, tuple[pymunk.Body, pymunk.Shape], bool], float]
+    ) -> list[dict]:
+    """
+    Run one full simulation episode and collect experience tuples for DeepRL training.
+
+    Parameters
+   -------
+    max_steps : int
+        Maximum number of timesteps to simulate.
+    scoring_function : Callable
+        Function that computes the reward for a given player.
+
+    Returns
+   ----
+    experiences : list of dict
+        Each element corresponds to one player's trajectory, containing:
+            'states'       : np.ndarray of shape (T, input_dim)
+            'actions'      : np.ndarray of shape (T, output_dim)
+            'rewards'      : np.ndarray of shape (T,)
+            'next_states'  : np.ndarray of shape (T, input_dim)
+            'dones'        : np.ndarray of shape (T,)
+    """
+
+    # Initialization
+    game = initGame()
+    players = game["players"]
+    n_players = len(players)
+    human_player = game["selected_player"]
+
+    # Store experience per player
+    experiences = [
+        {
+            "states": [],
+            "actions": [],
+            "rewards": [],
+            "next_states": [],
+            "dones": []
+        }
+        for id_player in range(n_players)
+    ]
+
+    # Precompute initial vision (avoid recomputing unnecessarily)
+    visions = [Vision.getVision(game, p) for p in players]
+
+    for step in range(max_steps):
+
+        # Actions
+        actions_t = []
+        for i, player in enumerate(players):
+            if player != human_player:
+                action = AIActions.play(game, player, visions[i])  # returns model output (float array)
+            else:
+                # For now, human can be replaced by random or skip
+                action = np.zeros(8, dtype=np.float32)
+            actions_t.append(action)
+
+        # Physics step
+        for step in range(Settings.DELTA_TIME):
+            game["space"].step(0.001)
+
+        Actions.reset_movements(game)
+        scored = Utils.checkIfGoal(game, initGame)
+        done = bool(scored[0]) # episode ends when a goal is scored
+        Utils.checkPlayersOut(players)
+
+        # Compute rewards & next states
+        for i, player in enumerate(players):
+            reward = scoring_function(game, player, scored)
+            reward = np.float32(reward)
+
+            next_vision = Vision.getVision(game, player)
+
+            # Store experience
+            exp = experiences[i]
+            exp["states"].append(visions[i])
+            exp["actions"].append(actions_t[i])
+            exp["rewards"].append(reward)
+            exp["next_states"].append(next_vision)
+            exp["dones"].append(done)
+
+            # Update cached vision
+            visions[i] = next_vision
+
+        # End simulation early if goal scored
+        if done:
+            break
+
+    # Convert lists to NumPy arrays for efficient training
+    for exp in experiences:
+        exp["states"] = np.array(exp["states"], dtype=np.float32)
+        exp["actions"] = np.array(exp["actions"], dtype=np.float32)
+        exp["rewards"] = np.array(exp["rewards"], dtype=np.float32)
+        exp["next_states"] = np.array(exp["next_states"], dtype=np.float32)
+        exp["dones"] = np.array(exp["dones"], dtype=bool)
+
+    return experiences
+
+# Simulation graphique avec un humain
+# main()
+
+model = nn.DeepRLNetwork(dimensions=[456, 512, 256, 128, 8])
+optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+
+nn.train_dqn_for_duration(
+    model=model,
+    optimizer=optimizer,
+    simulate_episode=simulate_episode,
+    scoring_function = compute_reward,
+    max_duration_s=600,  # 10 minutes
+)
+
+nn.save_network(model, "C:/.ingé/Projet-Sport-Co-Networks")
 
 
 
