@@ -11,6 +11,7 @@ import pymunk.pygame_util
 import pygame
 from typing import Callable
 import torch
+import random
 
 import Settings
 import Graphics.GraphicEngine as GE
@@ -172,21 +173,18 @@ def compute_reward(game: dict, player: tuple[pymunk.Body, pymunk.Shape], scored:
     ball_body, ball_shape = game["ball"]
     has_scored, left_team_scored = scored
     
+    left_goal = game["left_goal_position"]
+    right_goal = game["right_goal_position"]
+    
     offset = Settings.SCREEN_OFFSET
     dim_x = Settings.DIM_X
     dim_y = Settings.DIM_Y
     
     reward = 0.0
-    
-    # Distance to opponent goal, 0 if in the middle, entre 0.1 et -0.1
-    if shape.left_team:
-        reward += (ball_body.position[0] - (dim_x/2 + offset)) / dim_x /10
-    else:
-        reward += ((dim_x/2 + offset) - ball_body.position[0]) / dim_x / 10
         
-    # Distance to ball
     alpha, beta = 1.0, 0.5  # relative weights
     
+    # Distance to ball
     prev_dx = (ball_body.previous_position[0] - body.previous_position[0]) / dim_x
     prev_dy = (ball_body.previous_position[1] - body.previous_position[1]) / dim_y
     prev_dist = np.sqrt(alpha * prev_dx**2 + beta * prev_dy**2)
@@ -199,11 +197,33 @@ def compute_reward(game: dict, player: tuple[pymunk.Body, pymunk.Shape], scored:
     reward += np.tanh(delta) # récompense entre -1 et 1, normalement assez petite
     
     
+    # Distance of ball to opponent goal
+    if shape.left_team:
+        prev_dx = (right_goal[0] - ball_body.previous_position[0]) / dim_x
+        prev_dy = (right_goal[1] - ball_body.previous_position[1]) / dim_y
+        prev_dist = np.sqrt(alpha * prev_dx**2 + beta * prev_dy**2)
+        
+        curr_dx = (right_goal[0] - ball_body.previous_position[0]) / dim_x
+        curr_dy = (right_goal[1] - ball_body.previous_position[1]) / dim_y
+        curr_dist = np.sqrt(alpha * curr_dx**2 + beta * curr_dy**2)
+    else:
+        prev_dx = (left_goal[0] - ball_body.previous_position[0]) / dim_x
+        prev_dy = (left_goal[1] - ball_body.previous_position[1]) / dim_y
+        prev_dist = np.sqrt(alpha * prev_dx**2 + beta * prev_dy**2)
+        
+        curr_dx = (left_goal[0] - ball_body.previous_position[0]) / dim_x
+        curr_dy = (left_goal[1] - ball_body.previous_position[1]) / dim_y
+        curr_dist = np.sqrt(alpha * curr_dx**2 + beta * curr_dy**2)
+    
+    delta = prev_dist - curr_dist
+    reward += np.tanh(delta) # récompense entre -1 et 1, normalement assez petite
+    
+    
     # Penalize for being out of bounds
     x, y = body.position
     offset = Settings.SCREEN_OFFSET
     if x < offset or x > Settings.DIM_X + offset:
-        reward -= 10
+        reward -= 25
     
     # Scoring
     if(has_scored):
@@ -221,7 +241,8 @@ def compute_reward(game: dict, player: tuple[pymunk.Body, pymunk.Shape], scored:
 def simulate_episode(
     model: nn.DeepRLNetwork,
     max_steps: int,
-    scoring_function: Callable[[dict, tuple[pymunk.Body, pymunk.Shape], bool], float]
+    scoring_function: Callable[[dict, tuple[pymunk.Body, pymunk.Shape], bool], float],
+    epsilon: float = 0.0
     ) -> list[dict]:
     """
     Run one full simulation episode and collect experience tuples for DeepRL training.
@@ -274,8 +295,8 @@ def simulate_episode(
         for i, player in enumerate(players):
             body, shape = player
             body.previous_position = body.position
-            if player != player_to_train:
-                action = AIActions.play(game, player, vision=visions[i])
+            if random.random() < epsilon or player != player_to_train:
+                action = AIActions.play(game, player, vision=visions[i]) # Random
             else:
                 action = AIActions.play(game, player, model=model, vision=visions[i])
             actions_t.append(action)
@@ -337,7 +358,7 @@ nn.train_dqn_for_duration(
     optimizer=optimizer,
     simulate_episode=simulate_episode,
     scoring_function = compute_reward,
-    max_duration_s=600,
+    max_duration_s=3400,
 )
 
 nn.save_network(model, "C:/.ingé/Projet-Sport-Co-Networks")

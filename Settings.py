@@ -8,7 +8,7 @@ Created on Sat Oct 11 16:30:06 2025
 import numpy as np
 
 # Jeu :
-DELTA_TIME = 10 # ms, should be a divider of 1000
+DELTA_TIME = 100 # ms, should be a divider of 1000
 MAX_FPS = 60 # Limits fps to a certain amount => less laggy
 SCREEN_OFFSET = 75 # px
 BACKGROUND_COLOR = (30, 30, 30)

@@ -43,6 +43,7 @@ class DeepRLNetwork(nn.Module):
         torch.Tensor
             Output tensor of shape (batch_size, output_dim)
         """
+        
         for i, layer in enumerate(self.layers):
             x = layer(x)
             if i < len(self.layers) - 1:  # Apply activation to all except last layer
@@ -95,6 +96,9 @@ def train_dqn_for_duration(
     loss_fn: torch.nn.Module = torch.nn.MSELoss(),
     max_duration_s: int = 300,
     gamma: float = 0.99,
+    epsilon_start: float = 1.0,
+    epsilon_final: float = 0.1,
+    epsilon_decay: int = 1_000,
     batch_size: int = 64,
     buffer_size: int = 50_000,
     device: str = "cuda" if torch.cuda.is_available() else "cpu",
@@ -135,6 +139,8 @@ def train_dqn_for_duration(
     
     model.to(device)
     replay_buffer = deque(maxlen=buffer_size)
+    epsilon = epsilon_start
+    epsilon_decay_rate = (epsilon_start - epsilon_final) / epsilon_decay
 
     start_time = time.time()
     steps = 0
@@ -143,7 +149,7 @@ def train_dqn_for_duration(
 
     while (time.time() - start_time) < max_duration_s:
         # Simulate one full episode
-        episode_data = simulate_episode(model=model, max_steps=1000, scoring_function=scoring_function)[0]
+        episode_data = simulate_episode(model=model, max_steps=1000, scoring_function=scoring_function, epsilon=epsilon)[0]
 
         states = episode_data["states"]
         actions = episode_data["actions"]
@@ -186,11 +192,13 @@ def train_dqn_for_duration(
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+        epsilon = max(epsilon_final, epsilon - epsilon_decay_rate)
 
         steps += 1
         if(steps == 5):
             elapsed = time.time() - start_time
             print(f"[{elapsed:.1f}s] Steps: {steps}, Buffer: {len(replay_buffer)}, Loss: {loss.item()*1000:.4f}")
+        
         if steps % 100 == 0:
             elapsed = time.time() - start_time
             print(f"[{elapsed:.1f}s] Steps: {steps}, Buffer: {len(replay_buffer)}, Loss: {loss.item()*1000:.4f}")

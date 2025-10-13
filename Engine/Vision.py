@@ -76,7 +76,7 @@ def rayTracing(game: dict, player: tuple[pymunk.Body, pymunk.Shape]) -> tuple[np
     step = fov / (number_of_rays - 1)
     origin = body.position
 
-    distances = np.full(number_of_rays, np.inf, dtype=np.float32)
+    distances = np.full(number_of_rays, max_dist, dtype=np.float32)
     types = np.zeros(number_of_rays, dtype=np.int8)
 
     # Save original filter and ignore the player itself
@@ -123,7 +123,7 @@ def rayTracing(game: dict, player: tuple[pymunk.Body, pymunk.Shape]) -> tuple[np
     # Fill distances for all rays
     for i in range(number_of_rays):
         vision_array[7*i] = distances[i]
-
+        
     return vision_array
 
 

@@ -77,9 +77,9 @@ def checkPlayersOut(players: list[tuple]) -> None:
         
         # Clamp horizontal position
         if x < offset:
-            x = offset
+            x = offset + 10
         elif x > dim_x + offset:
-            x = dim_x + offset
+            x = dim_x + offset - 10
             
         body.position = (x, y)
         

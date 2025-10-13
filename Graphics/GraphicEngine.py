@@ -274,9 +274,9 @@ def buildBall(game: dict, random_ball_position: bool = True) -> None:
     body = pymunk.Body(mass, moment)
     if(random_ball_position):
         body.position = (
-            randint(round(offset +dim_x *1/3), round(offset +dim_x *2/3)),
-            randint(round(offset +dim_y *1/3), round(offset +dim_y *2/3))
-        )  # random between 1/3 and 2/3 for x and y
+            randint(round(offset +dim_x *1/10), round(offset +dim_x *9/10)),
+            randint(round(offset +dim_y *1/10), round(offset +dim_y *9/10))
+        )  # random position
     else:
         body.position = (
             offset +dim_x / 2,
