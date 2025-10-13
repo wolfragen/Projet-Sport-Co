@@ -10,7 +10,7 @@ import pymunk
 import pymunk.pygame_util
 import pygame
 from typing import Callable
-import torch
+#import torch
 
 import Settings
 import Graphics.GraphicEngine as GE
@@ -19,7 +19,7 @@ import AI.AIActions as AIActions
 import Engine.Actions as Actions
 import Engine.Utils as Utils
 import Engine.Vision as Vision
-import AI.Network as nn
+#import AI.Network as nn
 
 
 should_continue = True
@@ -150,7 +150,7 @@ def main() -> None:
     return
 
 
-def compute_reward(game, player, scored) -> float:
+def compute_reward(game: dict, player: tuple[pymunk.Body, pymunk.Shape], scored: tuple[bool,bool]) -> float:
     """
     Compute the reward for a given player based on the current game state.
     
@@ -299,8 +299,9 @@ def simulate_episode(
     return experiences
 
 # Simulation graphique avec un humain
-# main()
+main()
 
+"""
 model = nn.DeepRLNetwork(dimensions=[456, 512, 256, 128, 8])
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
 
@@ -313,7 +314,7 @@ nn.train_dqn_for_duration(
 )
 
 nn.save_network(model, "C:/.ingé/Projet-Sport-Co-Networks")
-
+"""
 
 
 

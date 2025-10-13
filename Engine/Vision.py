@@ -166,9 +166,8 @@ def getVision(game: dict, player: tuple[pymunk.Body, pymunk.Shape]) -> np.ndarra
 
     # Normalize ray distances and copy one-hot info
     ray_data = rayTracing(game, player)
-    distances = ray_data[::7] / Settings.VISION_RANGE
-    one_hot = ray_data[1:].reshape(number_of_rays, 6)
-    vision_array[8:] = np.hstack([distances[:, None], one_hot]).flatten()
+    ray_data[::7] = ray_data[::7] / Settings.VISION_RANGE
+    vision_array[8:] = ray_data.flatten()
 
     return vision_array
 
