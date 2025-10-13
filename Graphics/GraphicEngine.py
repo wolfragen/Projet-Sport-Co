@@ -9,6 +9,7 @@ import pygame
 import pymunk
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
+from random import randint
 
 import Settings
 
@@ -242,7 +243,7 @@ def buildBoard(game: dict) -> None:
     return
 
 
-def buildBall(game: dict) -> None:
+def buildBall(game: dict, random_ball_position: bool = True) -> None:
     """
     Creates the ball in the center of the field with physical properties and adds it to the game space.
 
@@ -262,16 +263,26 @@ def buildBall(game: dict) -> None:
     # Ball parameters
     radius = Settings.BALL_RADIUS
     mass = Settings.BALL_MASS
+    dim_x = Settings.DIM_X
+    dim_y = Settings.DIM_Y
+    offset = Settings.SCREEN_OFFSET
 
     # Calculate moment of inertia
     moment = pymunk.moment_for_circle(mass, 0, radius)
 
     # Dynamic body for the ball
     body = pymunk.Body(mass, moment)
-    body.position = (
-        Settings.SCREEN_OFFSET + Settings.DIM_X / 2,
-        Settings.SCREEN_OFFSET + Settings.DIM_Y / 2
-    )  # center of the field
+    if(random_ball_position):
+        body.position = (
+            randint(round(offset +dim_x *1/3), round(offset +dim_x *2/3)),
+            randint(round(offset +dim_y *1/3), round(offset +dim_y *2/3))
+        )  # random between 1/3 and 2/3 for x and y
+    else:
+        body.position = (
+            offset +dim_x / 2,
+            offset + dim_y / 2
+        )  # center of the field
+    body.previous_position = body.position
 
     # Circle shape for the ball
     shape = pymunk.Circle(body, radius)
@@ -323,6 +334,7 @@ def buildPlayers(game: dict, dim_x: float = Settings.DIM_X, dim_y: float = Setti
         moment = pymunk.moment_for_box(mass, (size, size))
         body = pymunk.Body(mass, moment)
         body.position = pos
+        body.previous_posisiton = pos
         body.angle = angle
 
         shape = pymunk.Poly.create_box(body, (size, size))

@@ -6,13 +6,15 @@ Created on Sun Oct 12 01:47:35 2025
 """
 
 import numpy as np
+import torch
 
 import Engine.Vision as Vision
 import Engine.Actions as Actions
+import AI.Network as nn
 import Settings
 
 
-def play(game: dict, player: tuple, vision: np.array = None) -> np.array:
+def play(game: dict, player: tuple, model: nn.DeepRLNetwork = None, vision: np.array = None) -> np.array:
     """
     Execute one AI action for a given player based on its vision and a decision array.
 
@@ -30,11 +32,13 @@ def play(game: dict, player: tuple, vision: np.array = None) -> np.array:
     """
     
     # Get the AI vision of the environment if not passed (graphic simulation)
-    if(vision == None):
+    if(vision is None):
         vision = Vision.getVision(game, player)
     
-    # TODO replace with actual AI decision logic
-    decision_array = random_play(game, player)  
+    if(model is None):
+        decision_array = random_play(game, player)
+    else:
+        decision_array = model(torch.from_numpy(vision).float()).detach().numpy()
     
     # Map decision outputs to main actions: move forward, rotate left, rotate right, shoot
     actions_array = [decision_array[0], decision_array[2], decision_array[4], decision_array[6]]

@@ -10,7 +10,7 @@ import pymunk
 import pymunk.pygame_util
 import pygame
 from typing import Callable
-#import torch
+import torch
 
 import Settings
 import Graphics.GraphicEngine as GE
@@ -19,7 +19,7 @@ import AI.AIActions as AIActions
 import Engine.Actions as Actions
 import Engine.Utils as Utils
 import Engine.Vision as Vision
-#import AI.Network as nn
+import AI.Network as nn
 
 
 should_continue = True
@@ -97,7 +97,7 @@ def stopGame() -> None:
     return
 
 
-def main() -> None:
+def main(model: nn.DeepRLNetwork = None) -> None:
     """
     Main game loop.  
     Handles initialization, player actions (human and AI), physics updates, display refresh, 
@@ -132,7 +132,7 @@ def main() -> None:
             
             for player in game["players"]:
                 if player != human_player:
-                    AIActions.play(game, player) # AI Actions
+                    AIActions.play(game, player, model=model) # AI Actions
             
             for step in range(delta_time): # Necessary to avoid tunneling
                 game["space"].step(0.001) # 1 ms at a time
@@ -172,13 +172,32 @@ def compute_reward(game: dict, player: tuple[pymunk.Body, pymunk.Shape], scored:
     ball_body, ball_shape = game["ball"]
     has_scored, left_team_scored = scored
     
+    offset = Settings.SCREEN_OFFSET
+    dim_x = Settings.DIM_X
+    dim_y = Settings.DIM_Y
+    
     reward = 0.0
     
-    # Distance to opponent goal
+    # Distance to opponent goal, 0 if in the middle, entre 0.1 et -0.1
     if shape.left_team:
-        reward += (ball_body.position[0] - body.position[0]) / Settings.DIM_X
+        reward += (ball_body.position[0] - (dim_x/2 + offset)) / dim_x /10
     else:
-        reward += (body.position[0] - ball_body.position[0]) / Settings.DIM_X
+        reward += ((dim_x/2 + offset) - ball_body.position[0]) / dim_x / 10
+        
+    # Distance to ball
+    alpha, beta = 1.0, 0.5  # relative weights
+    
+    prev_dx = (ball_body.previous_position[0] - body.previous_position[0]) / dim_x
+    prev_dy = (ball_body.previous_position[1] - body.previous_position[1]) / dim_y
+    prev_dist = np.sqrt(alpha * prev_dx**2 + beta * prev_dy**2)
+    
+    curr_dx = (ball_body.position[0] - body.position[0]) / dim_x
+    curr_dy = (ball_body.position[1] - body.position[1]) / dim_y
+    curr_dist = np.sqrt(alpha * curr_dx**2 + beta * curr_dy**2)
+    
+    delta = prev_dist - curr_dist
+    reward += np.tanh(delta) # récompense entre -1 et 1, normalement assez petite
+    
     
     # Penalize for being out of bounds
     x, y = body.position
@@ -196,10 +215,11 @@ def compute_reward(game: dict, player: tuple[pymunk.Body, pymunk.Shape], scored:
         else:
             reward -= 100
     
-    return reward
+    return reward/100
 
 
 def simulate_episode(
+    model: nn.DeepRLNetwork,
     max_steps: int,
     scoring_function: Callable[[dict, tuple[pymunk.Body, pymunk.Shape], bool], float]
     ) -> list[dict]:
@@ -228,7 +248,6 @@ def simulate_episode(
     game = initGame()
     players = game["players"]
     n_players = len(players)
-    human_player = game["selected_player"]
 
     # Store experience per player
     experiences = [
@@ -246,15 +265,19 @@ def simulate_episode(
     visions = [Vision.getVision(game, p) for p in players]
 
     for step in range(max_steps):
-
+        player_to_train = game["selected_player"]
+        ball_body, ball_shape = game["ball"]
+        ball_body.previous_position = ball_body.position
+        
         # Actions
         actions_t = []
         for i, player in enumerate(players):
-            if player != human_player:
-                action = AIActions.play(game, player, visions[i])  # returns model output (float array)
+            body, shape = player
+            body.previous_position = body.position
+            if player != player_to_train:
+                action = AIActions.play(game, player, vision=visions[i])
             else:
-                # For now, human can be replaced by random or skip
-                action = np.zeros(8, dtype=np.float32)
+                action = AIActions.play(game, player, model=model, vision=visions[i])
             actions_t.append(action)
 
         # Physics step
@@ -270,6 +293,7 @@ def simulate_episode(
         for i, player in enumerate(players):
             reward = scoring_function(game, player, scored)
             reward = np.float32(reward)
+            if(reward is None): print(reward)
 
             next_vision = Vision.getVision(game, player)
 
@@ -298,10 +322,13 @@ def simulate_episode(
 
     return experiences
 
-# Simulation graphique avec un humain
-main()
 
+# Simulation graphique avec un humain
+model = nn.DeepRLNetwork(dimensions=[456, 512, 256, 128, 8])
+model = nn.load_network(model, "C:/.ingé/Projet-Sport-Co-Networks")
+main(model=model)
 """
+
 model = nn.DeepRLNetwork(dimensions=[456, 512, 256, 128, 8])
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
 
@@ -310,7 +337,7 @@ nn.train_dqn_for_duration(
     optimizer=optimizer,
     simulate_episode=simulate_episode,
     scoring_function = compute_reward,
-    max_duration_s=600,  # 10 minutes
+    max_duration_s=600,
 )
 
 nn.save_network(model, "C:/.ingé/Projet-Sport-Co-Networks")

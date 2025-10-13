@@ -143,7 +143,7 @@ def train_dqn_for_duration(
 
     while (time.time() - start_time) < max_duration_s:
         # Simulate one full episode
-        episode_data = simulate_episode(max_steps=1000, scoring_function=scoring_function)[0]
+        episode_data = simulate_episode(model=model, max_steps=1000, scoring_function=scoring_function)[0]
 
         states = episode_data["states"]
         actions = episode_data["actions"]
@@ -188,9 +188,12 @@ def train_dqn_for_duration(
         optimizer.step()
 
         steps += 1
+        if(steps == 5):
+            elapsed = time.time() - start_time
+            print(f"[{elapsed:.1f}s] Steps: {steps}, Buffer: {len(replay_buffer)}, Loss: {loss.item()*1000:.4f}")
         if steps % 100 == 0:
             elapsed = time.time() - start_time
-            print(f"[{elapsed:.1f}s] Steps: {steps}, Buffer: {len(replay_buffer)}, Loss: {loss.item():.4f}")
+            print(f"[{elapsed:.1f}s] Steps: {steps}, Buffer: {len(replay_buffer)}, Loss: {loss.item()*1000:.4f}")
 
     print("\nTraining finished.")
     return
