@@ -25,7 +25,7 @@ import AI.Network as nn
 
 should_continue = True
 
-def initGame(score : np.array = np.zeros(2, dtype=np.uint8)) -> dict:
+def initGame(players_number: list[int,int] = [1,1], score : np.array = np.zeros(2, dtype=np.uint8)) -> dict:
     """
     Initiate a new game from a given score, and return the dict "game".
     
@@ -76,7 +76,7 @@ def initGame(score : np.array = np.zeros(2, dtype=np.uint8)) -> dict:
     
     GE.buildBoard(game) # Creates static objects
     GE.buildBall(game) # Creates the ball
-    GE.buildPlayers(game) # Creates the players
+    GE.buildPlayers(game, players_number) # Creates the players
     
     return game
 
@@ -98,7 +98,7 @@ def stopGame() -> None:
     return
 
 
-def main(model: nn.DeepRLNetwork = None) -> None:
+def main(players_number, models: nn.DeepRLNetwork = None) -> None:
     """
     Main game loop.  
     Handles initialization, player actions (human and AI), physics updates, display refresh, 
@@ -109,9 +109,15 @@ def main(model: nn.DeepRLNetwork = None) -> None:
     None
         This function does not return any value.
     """
+    n_players = players_number[0] + players_number[1]
+    
+    if(models is None):
+        models = [None for i in range(n_players)]
+        
+    assert len(models) == n_players
     
     pygame.init()
-    game = initGame()
+    game = initGame(players_number)
     screen, draw_options = GE.initScreen()
     
     clock = pygame.time.Clock() # Necessary to "force" loop time
@@ -131,7 +137,10 @@ def main(model: nn.DeepRLNetwork = None) -> None:
             
             human_player = game["selected_player"]
             
-            for player in game["players"]:
+            for i in range(n_players):
+                player = game["players"][i]
+                model = models[i]
+                
                 if player != human_player:
                     AIActions.play(game, player, model=model) # AI Actions
             
@@ -146,8 +155,12 @@ def main(model: nn.DeepRLNetwork = None) -> None:
                 time -= min_delta_time
                 
             clock.tick(fps) # Force the loop to trigger at a certain pace
-            Utils.checkIfGoal(game, initGame)
+            scored = Utils.checkIfGoal(game)
             Utils.checkPlayersOut(game["players"]) # Checks if players are out of bounds
+            
+            if(bool(scored[0])):
+                new_game = initGame(players_number, game["score"])
+                game.update(new_game)
     return
 
 
@@ -239,7 +252,8 @@ def compute_reward(game: dict, player: tuple[pymunk.Body, pymunk.Shape], scored:
 
 
 def simulate_episode(
-    model: nn.DeepRLNetwork,
+    players_number: list[int,int],
+    models: list[nn.DeepRLNetwork],
     max_steps: int,
     scoring_function: Callable[[dict, tuple[pymunk.Body, pymunk.Shape], bool], float],
     epsilon: float = 0.0
@@ -266,7 +280,7 @@ def simulate_episode(
     """
 
     # Initialization
-    game = initGame()
+    game = initGame(players_number)
     players = game["players"]
     n_players = len(players)
 
@@ -286,7 +300,6 @@ def simulate_episode(
     visions = [Vision.getVision(game, p) for p in players]
 
     for step in range(max_steps):
-        player_to_train = game["selected_player"]
         ball_body, ball_shape = game["ball"]
         ball_body.previous_position = ball_body.position
         
@@ -295,7 +308,7 @@ def simulate_episode(
         for i, player in enumerate(players):
             body, shape = player
             body.previous_position = body.position
-            if random.random() < epsilon or player != player_to_train:
+            if random.random() < epsilon:
                 action = AIActions.play(game, player, vision=visions[i]) # Random
             else:
                 action = AIActions.play(game, player, model=model, vision=visions[i])
@@ -306,7 +319,7 @@ def simulate_episode(
             game["space"].step(0.001)
 
         Actions.reset_movements(game)
-        scored = Utils.checkIfGoal(game, initGame)
+        scored = Utils.checkIfGoal(game)
         done = bool(scored[0]) # episode ends when a goal is scored
         Utils.checkPlayersOut(players)
 
@@ -347,7 +360,7 @@ def simulate_episode(
 # Simulation graphique avec un humain
 model = nn.DeepRLNetwork(dimensions=[456, 512, 256, 128, 8])
 model = nn.load_network(model, "C:/.ingé/Projet-Sport-Co-Networks")
-main(model=model)
+main(players_number=(1,1))
 """
 
 model = nn.DeepRLNetwork(dimensions=[456, 512, 256, 128, 8])

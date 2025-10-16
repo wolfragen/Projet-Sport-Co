@@ -5,22 +5,17 @@ Created on Sun Oct 12 14:23:39 2025
 @author: quent
 """
 
-import numpy as np
-
 import Settings
 
 
-def checkIfGoal(game: dict, initGame: callable) -> tuple[bool,bool]:
+def checkIfGoal(game: dict) -> tuple[bool,bool]:
     """
     Checks if a goal has been scored and by which team.  
-    If a goal is detected, resets the round by reinitializing the game state.
 
     Parameters
     ----------
     game : dict
         Current game state containing ball position, score, and other entities.
-    initGame : callable
-        Function to initialize a new game state, optionally accepting a score.
 
     Returns
     -------
@@ -38,15 +33,11 @@ def checkIfGoal(game: dict, initGame: callable) -> tuple[bool,bool]:
     if ball_x < offset:
         # Goal scored by right team
         game["score"][1] += 1
-        new_game = initGame(game["score"])
-        game.update(new_game)
         return (True, False)
     
     elif ball_x > dim_x + offset:
         # Goal scored by left team
         game["score"][0] += 1
-        new_game = initGame(game["score"])
-        game.update(new_game)
         return (True, True)
     
     return (False, None)

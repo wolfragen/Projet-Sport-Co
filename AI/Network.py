@@ -89,8 +89,10 @@ def load_network(network: DeepRLNetwork, path: str, device: str = "cpu"):
 
 
 def train_dqn_for_duration(
-    model: torch.nn.Module,
-    optimizer: torch.optim.Optimizer,
+    players_number: tuple[int,int],
+    models: list[torch.nn.Module],
+    optimizer_cls: torch.optim.Optimizer,
+    lr: float,
     simulate_episode: callable,
     scoring_function: callable,
     loss_fn: torch.nn.Module = torch.nn.MSELoss(),
@@ -137,8 +139,14 @@ def train_dqn_for_duration(
         Trains the model in-place.
     """
     
-    model.to(device)
-    replay_buffer = deque(maxlen=buffer_size)
+    assert len(models) == players_number[0]+players_number[1]
+    
+    # Load models to GPU/CPU
+    for model in models:
+        model.to(device)
+        
+    replay_buffers = [deque(maxlen=buffer_size) for _ in range(len(models))]
+    optimizers = [optimizer_cls(model.parameters(), lr=lr) for model in models]
     epsilon = epsilon_start
     epsilon_decay_rate = (epsilon_start - epsilon_final) / epsilon_decay
 
@@ -149,59 +157,64 @@ def train_dqn_for_duration(
 
     while (time.time() - start_time) < max_duration_s:
         # Simulate one full episode
-        episode_data = simulate_episode(model=model, max_steps=1000, scoring_function=scoring_function, epsilon=epsilon)[0]
+        episode_data = simulate_episode(model=model, max_steps=1000, scoring_function=scoring_function, epsilon=epsilon)
+        
+        for player_id in range(len(models)):
+            player_data = episode_data[player_id]
+            replay_buffer = replay_buffers[player_id]
+            optimizer = optimizers[player_id]
+            
+            states = player_data["states"]
+            actions = player_data["actions"]
+            rewards = player_data["rewards"]
+            next_states = player_data["next_states"]
 
-        states = episode_data["states"]
-        actions = episode_data["actions"]
-        rewards = episode_data["rewards"]
-        next_states = episode_data["next_states"]
-
-        # Store transitions
-        for s, a, r, ns in zip(states, actions, rewards, next_states):
-            replay_buffer.append((s, a, r, ns))
-
-        # Skip until we have enough samples
-        if len(replay_buffer) < batch_size:
-            continue
-
-        # Sample a random minibatch
-        batch = random.sample(replay_buffer, batch_size)
-        s_batch, a_batch, r_batch, ns_batch = zip(*batch)
-
-        # Convert to tensors
-        s_batch = torch.tensor(np.array(s_batch), dtype=torch.float32, device=device)
-        a_batch = torch.tensor(np.array(a_batch), dtype=torch.float32, device=device)
-        r_batch = torch.tensor(np.array(r_batch), dtype=torch.float32, device=device).unsqueeze(1)
-        ns_batch = torch.tensor(np.array(ns_batch), dtype=torch.float32, device=device)
-
-        # Forward passes
-        q_values = model(s_batch)
-        next_q_values = model(ns_batch).detach()
-
-        # Compute target: r + gamma * max(Q_next)
-        target_q = r_batch + gamma * next_q_values.max(dim=1, keepdim=True).values
-
-        # Gather Q-values corresponding to chosen actions
-        # (Assumes continuous action outputs in [0,1] — adapt for discrete)
-        predicted_q = q_values.gather(1, a_batch.argmax(dim=1, keepdim=True))
-
-        # Compute loss
-        loss = loss_fn(predicted_q, target_q)
-
-        # Backpropagation
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+            # Store transitions
+            for s, a, r, ns in zip(states, actions, rewards, next_states):
+                replay_buffer.append((s, a, r, ns))
+    
+            # Skip until we have enough samples
+            if len(replay_buffer) < batch_size:
+                continue
+    
+            # Sample a random minibatch
+            batch = random.sample(replay_buffer, batch_size)
+            s_batch, a_batch, r_batch, ns_batch = zip(*batch)
+    
+            # Convert to tensors
+            s_batch = torch.tensor(np.array(s_batch), dtype=torch.float32, device=device)
+            a_batch = torch.tensor(np.array(a_batch), dtype=torch.float32, device=device)
+            r_batch = torch.tensor(np.array(r_batch), dtype=torch.float32, device=device).unsqueeze(1)
+            ns_batch = torch.tensor(np.array(ns_batch), dtype=torch.float32, device=device)
+    
+            # Forward passes
+            q_values = model(s_batch)
+            next_q_values = model(ns_batch).detach()
+    
+            # Compute target: r + gamma * max(Q_next)
+            target_q = r_batch + gamma * next_q_values.max(dim=1, keepdim=True).values
+    
+            # Gather Q-values corresponding to chosen actions
+            # (Assumes continuous action outputs in [0,1] — adapt for discrete)
+            predicted_q = q_values.gather(1, a_batch.argmax(dim=1, keepdim=True))
+    
+            # Compute loss
+            loss = loss_fn(predicted_q, target_q)
+    
+            # Backpropagation
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            
         epsilon = max(epsilon_final, epsilon - epsilon_decay_rate)
-
         steps += 1
         if(steps == 5):
             elapsed = time.time() - start_time
-            print(f"[{elapsed:.1f}s] Steps: {steps}, Buffer: {len(replay_buffer)}, Loss: {loss.item()*1000:.4f}")
+            print(f"[{elapsed:.1f}s] Steps: {steps}, Loss: {loss.item()*1000:.4f}")
         
         if steps % 100 == 0:
             elapsed = time.time() - start_time
-            print(f"[{elapsed:.1f}s] Steps: {steps}, Buffer: {len(replay_buffer)}, Loss: {loss.item()*1000:.4f}")
+            print(f"[{elapsed:.1f}s] Steps: {steps}, Loss: {loss.item()*1000:.4f}")
 
     print("\nTraining finished.")
     return

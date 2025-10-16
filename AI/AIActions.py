@@ -50,6 +50,9 @@ def play(game: dict, player: tuple, model: nn.DeepRLNetwork = None, vision: np.a
     # Determine the action with the highest value
     i_max = actions_array.index(max(actions_array))  # Final decision
     
+    if(max(actions_array)) == 0:
+        return decision_array
+    
     if i_max == 0:
         # Move forward
         Actions.move(player, speed=speed)  # TODO variable speed? decision_array[1]
