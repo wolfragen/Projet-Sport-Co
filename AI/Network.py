@@ -86,7 +86,7 @@ def load_network(network: DeepRLNetwork, path: str, device: str = "cpu"):
     return network
 
 
-
+# optuna ?
 
 def train_dqn_for_duration(
     players_number: tuple[int,int],
@@ -157,7 +157,7 @@ def train_dqn_for_duration(
 
     while (time.time() - start_time) < max_duration_s:
         # Simulate one full episode
-        episode_data = simulate_episode(model=model, max_steps=1000, scoring_function=scoring_function, epsilon=epsilon)
+        episode_data = simulate_episode(players_number, models=models, max_steps=1000, scoring_function=scoring_function, epsilon=epsilon)
         
         for player_id in range(len(models)):
             player_data = episode_data[player_id]

@@ -207,7 +207,7 @@ def compute_reward(game: dict, player: tuple[pymunk.Body, pymunk.Shape], scored:
     curr_dist = np.sqrt(alpha * curr_dx**2 + beta * curr_dy**2)
     
     delta = prev_dist - curr_dist
-    reward += np.tanh(delta) # récompense entre -1 et 1, normalement assez petite
+    reward += np.tanh(delta)/2 # récompense entre -1 et 1, normalement assez petite
     
     
     # Distance of ball to opponent goal
@@ -308,6 +308,7 @@ def simulate_episode(
         for i, player in enumerate(players):
             body, shape = player
             body.previous_position = body.position
+            model = models[i]
             if random.random() < epsilon:
                 action = AIActions.play(game, player, vision=visions[i]) # Random
             else:
@@ -356,26 +357,27 @@ def simulate_episode(
 
     return experiences
 
-
+"""
 # Simulation graphique avec un humain
 model = nn.DeepRLNetwork(dimensions=[456, 512, 256, 128, 8])
-model = nn.load_network(model, "C:/.ingé/Projet-Sport-Co-Networks")
-main(players_number=(1,1))
+models = [nn.load_network(model, "C:/.ingé/Projet-Sport-Co-Networks") for i in range(16)]
+main(players_number=(8,8), models = models)
 """
 
-model = nn.DeepRLNetwork(dimensions=[456, 512, 256, 128, 8])
-optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+models = [nn.DeepRLNetwork(dimensions=[456, 512, 256, 128, 8]) for i in range(1)]
 
 nn.train_dqn_for_duration(
-    model=model,
-    optimizer=optimizer,
+    players_number=(1,0),
+    models=models,
+    optimizer_cls=torch.optim.Adam,
+    lr=1e-4,
     simulate_episode=simulate_episode,
     scoring_function = compute_reward,
-    max_duration_s=3400,
+    max_duration_s=300,
 )
 
-nn.save_network(model, "C:/.ingé/Projet-Sport-Co-Networks")
-"""
+nn.save_network(models[0], "C:/.ingé/Projet-Sport-Co-Networks")
+
 
 
 

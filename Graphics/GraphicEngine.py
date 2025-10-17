@@ -411,14 +411,16 @@ def buildPlayers(game: dict, players_number: list[int,int], dim_x: float = Setti
     right_players = []
     
     left_positions = spacing(n_left, size, offset, offset, dim_x/2, dim_y)
-    right_positions = spacing(n_right, size, dim_x/2+offset, offset, dim_x/2, dim_y, revert_x=True)
 
     for i in range(n_left):
         pos = left_positions[i]
         left_players.append(create_square(pos.tolist(), angle=0, left_team=True))
-    for i in range(n_right):
-        pos = right_positions[-i]
-        right_players.append(create_square(pos.tolist(), angle=np.pi, left_team=False))
+        
+    if(n_right != 0):
+        right_positions = spacing(n_right, size, dim_x/2+offset, offset, dim_x/2, dim_y, revert_x=True)
+        for i in range(n_right):
+            pos = right_positions[-i]
+            right_players.append(create_square(pos.tolist(), angle=np.pi, left_team=False))
 
     # Flatten the lists
     left_flat = [item for pair in left_players for item in pair]
