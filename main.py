@@ -25,7 +25,7 @@ import AI.Network as nn
 
 should_continue = True
 
-def initGame(players_number: list[int,int] = [1,1], score : np.array = np.zeros(2, dtype=np.uint8)) -> dict:
+def initGame(players_number: list[int,int] = [1,1], score : np.array = np.zeros(2, dtype=np.uint8), human=True) -> dict:
     """
     Initiate a new game from a given score, and return the dict "game".
     
@@ -76,7 +76,7 @@ def initGame(players_number: list[int,int] = [1,1], score : np.array = np.zeros(
     
     GE.buildBoard(game) # Creates static objects
     GE.buildBall(game) # Creates the ball
-    GE.buildPlayers(game, players_number) # Creates the players
+    GE.buildPlayers(game, players_number, human) # Creates the players
     
     return game
 
@@ -98,7 +98,7 @@ def stopGame() -> None:
     return
 
 
-def main(players_number, models: nn.DeepRLNetwork = None) -> None:
+def main(players_number, models: nn.DeepRLNetwork = None, human: bool = True) -> None:
     """
     Main game loop.  
     Handles initialization, player actions (human and AI), physics updates, display refresh, 
@@ -117,7 +117,7 @@ def main(players_number, models: nn.DeepRLNetwork = None) -> None:
     assert len(models) == n_players
     
     pygame.init()
-    game = initGame(players_number)
+    game = initGame(players_number, human=human)
     screen, draw_options = GE.initScreen()
     
     clock = pygame.time.Clock() # Necessary to "force" loop time
@@ -236,7 +236,7 @@ def compute_reward(game: dict, player: tuple[pymunk.Body, pymunk.Shape], scored:
     x, y = body.position
     offset = Settings.SCREEN_OFFSET
     if x < offset or x > Settings.DIM_X + offset:
-        reward -= 25
+        reward -= 0 #TODO
     
     # Scoring
     if(has_scored):
@@ -357,27 +357,28 @@ def simulate_episode(
 
     return experiences
 
-"""
+
 # Simulation graphique avec un humain
-model = nn.DeepRLNetwork(dimensions=[456, 512, 256, 128, 8])
-models = [nn.load_network(model, "C:/.ingé/Projet-Sport-Co-Networks") for i in range(16)]
-main(players_number=(8,8), models = models)
+model = nn.DeepRLNetwork(dimensions=[457, 512, 256, 128, 8])
+models = [nn.load_network(model, "C:/.ingé/Projet-Sport-Co-Networks") for i in range(1)]
+main(players_number=(1,0), models = models, human=False)
 """
 
-models = [nn.DeepRLNetwork(dimensions=[456, 512, 256, 128, 8]) for i in range(1)]
+models = [nn.DeepRLNetwork(dimensions=[457, 512, 256, 128, 8]) for i in range(1)]
 
+# optimizer : adamax => 
 nn.train_dqn_for_duration(
     players_number=(1,0),
     models=models,
     optimizer_cls=torch.optim.Adam,
-    lr=1e-4,
+    lr=1e-3,
     simulate_episode=simulate_episode,
     scoring_function = compute_reward,
-    max_duration_s=300,
+    max_duration_s=600,
 )
 
 nn.save_network(models[0], "C:/.ingé/Projet-Sport-Co-Networks")
-
+"""
 
 
 

@@ -300,7 +300,7 @@ def buildBall(game: dict, random_ball_position: bool = True) -> None:
     return
 
 
-def buildPlayers(game: dict, players_number: list[int,int], dim_x: float = Settings.DIM_X, dim_y: float = Settings.DIM_Y) -> None:
+def buildPlayers(game: dict, players_number: list[int,int], human: bool, dim_x: float = Settings.DIM_X, dim_y: float = Settings.DIM_Y) -> None:
     """
     Creates the player bodies and shapes for a 1v1 game and adds them to the Pymunk space.
 
@@ -431,7 +431,10 @@ def buildPlayers(game: dict, players_number: list[int,int], dim_x: float = Setti
     game["players"] = left_players + right_players
     game["players_left"] = left_players
     game["players_right"] = right_players
-    game["selected_player"] = left_players[0]
+    if(human):
+        game["selected_player"] = left_players[0]
+    else:
+        game["selected_player"] = None
 
     return
 

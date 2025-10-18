@@ -39,6 +39,7 @@ def play(game: dict, player: tuple, model: nn.DeepRLNetwork = None, vision: np.a
         decision_array = random_play(game, player)
     else:
         decision_array = model(torch.from_numpy(vision).float()).detach().numpy()
+    print(decision_array)
     
     # Map decision outputs to main actions: move forward, rotate left, rotate right, shoot
     actions_array = [decision_array[0], decision_array[2], decision_array[4], decision_array[6]]

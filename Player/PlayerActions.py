@@ -40,6 +40,7 @@ def process_events(game: dict, stopGame: Callable[[], None]) -> None:
 
     keys = pygame.key.get_pressed()
     selected_player = game["selected_player"]
+    if(selected_player is None): return
     body, shape = selected_player
     speed = Settings.PLAYER_SPEED
     rotation_speed = Settings.PLAYER_ROT_SPEED

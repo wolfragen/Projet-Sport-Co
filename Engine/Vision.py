@@ -15,12 +15,12 @@ Pour les types en rayTracing :
     - 6: joueur droit
 
 autres paramètres de vision : 
-    - position du joueur
+    - position du joueur + orientation
     - position de la balle
     - position du goal gauche
     - position du goal droit
     
-Total de 456 entrées.
+Total de 457 entrées.
 
 """
 
@@ -142,7 +142,7 @@ def getVision(game: dict, player: tuple[pymunk.Body, pymunk.Shape]) -> np.ndarra
     -------
     vision_array : np.ndarray, shape (NUMBER_OF_RAYS*7 + 8,)
         Complete observation vector containing:
-            - Player position (x, y)
+            - Player position (x, y) + orientation
             - Ball position (x, y)
             - Left goal center position (x, y)
             - Right goal center position (x, y)
@@ -150,7 +150,7 @@ def getVision(game: dict, player: tuple[pymunk.Body, pymunk.Shape]) -> np.ndarra
     """
     
     number_of_rays = Settings.NUMBER_OF_RAYS
-    vision_array = np.zeros(number_of_rays * 7 + 8, dtype=np.float32)
+    vision_array = np.zeros(number_of_rays * 7 + 9, dtype=np.float32)
 
     # Player, ball, and goals positions
     body, shape = player
@@ -160,14 +160,15 @@ def getVision(game: dict, player: tuple[pymunk.Body, pymunk.Shape]) -> np.ndarra
     dim_x = Settings.DIM_X
     dim_y = Settings.DIM_Y
     vision_array[0:2] = body.position[0] / dim_x, body.position[1] / dim_y
-    vision_array[2:4] = ball_body.position[0] / dim_x, ball_body.position[1] / dim_y
-    vision_array[4:6] = game["left_goal_position"][0] / dim_x, game["left_goal_position"][1] / dim_y
-    vision_array[6:8] = game["right_goal_position"][0] / dim_x, game["right_goal_position"][1] / dim_y
+    vision_array[3] = body.angle / (2*np.pi)
+    vision_array[3:5] = ball_body.position[0] / dim_x, ball_body.position[1] / dim_y
+    vision_array[5:7] = game["left_goal_position"][0] / dim_x, game["left_goal_position"][1] / dim_y
+    vision_array[7:9] = game["right_goal_position"][0] / dim_x, game["right_goal_position"][1] / dim_y
 
     # Normalize ray distances and copy one-hot info
     ray_data = rayTracing(game, player)
     ray_data[::7] = ray_data[::7] / Settings.VISION_RANGE
-    vision_array[8:] = ray_data.flatten()
+    vision_array[9:] = ray_data.flatten()
 
     return vision_array
 

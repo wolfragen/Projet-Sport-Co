@@ -49,6 +49,7 @@ class DeepRLNetwork(nn.Module):
             if i < len(self.layers) - 1:  # Apply activation to all except last layer
                 x = F.relu(x)
             else:
+                print(x)
                 x = torch.sigmoid(x)  # Ensure output between 0 and 1
         return x
 
@@ -92,17 +93,17 @@ def train_dqn_for_duration(
     players_number: tuple[int,int],
     models: list[torch.nn.Module],
     optimizer_cls: torch.optim.Optimizer,
-    lr: float,
     simulate_episode: callable,
     scoring_function: callable,
     loss_fn: torch.nn.Module = torch.nn.MSELoss(),
+    lr: float = 1e-3,
     max_duration_s: int = 300,
     gamma: float = 0.99,
-    epsilon_start: float = 1.0,
+    epsilon_start: float = 0.8,
     epsilon_final: float = 0.1,
-    epsilon_decay: int = 1_000,
-    batch_size: int = 64,
-    buffer_size: int = 50_000,
+    epsilon_decay: int = 10_000,
+    batch_size: int = 128,
+    buffer_size: int = 20_000,
     device: str = "cuda" if torch.cuda.is_available() else "cpu",
 ) -> None:
     """
