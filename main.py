@@ -136,6 +136,8 @@ def main(players_number, models: nn.DeepRLNetwork = None, human: bool = True) ->
         if(should_continue):
             
             human_player = game["selected_player"]
+            ball_body, ball_shape = game["ball"]
+            ball_body.previous_position = ball_body.position
             
             for i in range(n_players):
                 player = game["players"][i]
@@ -156,10 +158,15 @@ def main(players_number, models: nn.DeepRLNetwork = None, human: bool = True) ->
                 
             clock.tick(fps) # Force the loop to trigger at a certain pace
             scored = Utils.checkIfGoal(game)
+            
+            for i in range(n_players):
+                player = game["players"][i]
+                print(compute_reward(game, player, scored))
+            
             Utils.checkPlayersOut(game["players"]) # Checks if players are out of bounds
             
             if(bool(scored[0])):
-                new_game = initGame(players_number, game["score"])
+                new_game = initGame(players_number, game["score"], human=human)
                 game.update(new_game)
     return
 
@@ -192,63 +199,116 @@ def compute_reward(game: dict, player: tuple[pymunk.Body, pymunk.Shape], scored:
     offset = Settings.SCREEN_OFFSET
     dim_x = Settings.DIM_X
     dim_y = Settings.DIM_Y
+    max_dist = Settings.MAX_DIST
+    
+    delta_time = Settings.DELTA_TIME
+    player_speed = Settings.PLAYER_SPEED
+    player_rotating_speed = Settings.PLAYER_ROT_SPEED
+    shooting_speed = Settings.SHOOTING_SPEED
     
     reward = 0.0
         
-    alpha, beta = 1.0, 0.5  # relative weights
+    alpha, beta = 1.0, 1  # relative weights
     
     # Distance to ball
-    prev_dx = (ball_body.previous_position[0] - body.previous_position[0]) / dim_x
-    prev_dy = (ball_body.previous_position[1] - body.previous_position[1]) / dim_y
+    prev_dx = (ball_body.previous_position[0] - body.previous_position[0])
+    prev_dy = (ball_body.previous_position[1] - body.previous_position[1])
     prev_dist = np.sqrt(alpha * prev_dx**2 + beta * prev_dy**2)
     
-    curr_dx = (ball_body.position[0] - body.position[0]) / dim_x
-    curr_dy = (ball_body.position[1] - body.position[1]) / dim_y
+    curr_dx = (ball_body.position[0] - body.position[0])
+    curr_dy = (ball_body.position[1] - body.position[1])
     curr_dist = np.sqrt(alpha * curr_dx**2 + beta * curr_dy**2)
     
     delta = prev_dist - curr_dist
-    reward += np.tanh(delta)/2 # récompense entre -1 et 1, normalement assez petite
+    delta_ball_player_reward = 0
+    if(abs(delta) > (player_speed * delta_time/1000)/1000):
+        delta_ball_player_reward = 5* delta / (player_speed * delta_time/1000)
+        
+    dist_ball_player_reward = -3* curr_dist/max_dist
     
     
     # Distance of ball to opponent goal
     if shape.left_team:
-        prev_dx = (right_goal[0] - ball_body.previous_position[0]) / dim_x
-        prev_dy = (right_goal[1] - ball_body.previous_position[1]) / dim_y
+        prev_dx = (right_goal[0] - ball_body.previous_position[0])
+        prev_dy = (right_goal[1] - ball_body.previous_position[1])
         prev_dist = np.sqrt(alpha * prev_dx**2 + beta * prev_dy**2)
         
-        curr_dx = (right_goal[0] - ball_body.previous_position[0]) / dim_x
-        curr_dy = (right_goal[1] - ball_body.previous_position[1]) / dim_y
+        curr_dx = (right_goal[0] - ball_body.previous_position[0])
+        curr_dy = (right_goal[1] - ball_body.previous_position[1])
         curr_dist = np.sqrt(alpha * curr_dx**2 + beta * curr_dy**2)
     else:
-        prev_dx = (left_goal[0] - ball_body.previous_position[0]) / dim_x
-        prev_dy = (left_goal[1] - ball_body.previous_position[1]) / dim_y
+        prev_dx = (left_goal[0] - ball_body.previous_position[0])
+        prev_dy = (left_goal[1] - ball_body.previous_position[1])
         prev_dist = np.sqrt(alpha * prev_dx**2 + beta * prev_dy**2)
         
-        curr_dx = (left_goal[0] - ball_body.previous_position[0]) / dim_x
-        curr_dy = (left_goal[1] - ball_body.previous_position[1]) / dim_y
+        curr_dx = (left_goal[0] - ball_body.previous_position[0])
+        curr_dy = (left_goal[1] - ball_body.previous_position[1])
         curr_dist = np.sqrt(alpha * curr_dx**2 + beta * curr_dy**2)
     
     delta = prev_dist - curr_dist
-    reward += np.tanh(delta) # récompense entre -1 et 1, normalement assez petite
+    delta_ball_goal_reward = 0
+    if(abs(delta) > (shooting_speed * delta_time/1000)/1000):
+        delta_ball_goal_reward = 10* delta / (shooting_speed * delta_time/1000)
+        
+    dist_ball_goal_reward = -1* curr_dist/max_dist
+        
+        
+    # Angle between player and ball
+    vec_ball = np.array([ball_body.position[0] - body.position[0], ball_body.position[1] - body.position[1]])
+    angle_to_ball = np.arctan2(vec_ball[1], vec_ball[0])
+    angle_diff = (angle_to_ball - body.angle + np.pi) % (2*np.pi) - np.pi # back to -pi ; +pi
+    max_angle = np.deg2rad(20)
+    angle_diff_reward = 0
+    if abs(angle_diff) <= max_angle:
+        angle_diff_reward = 2
+    else:
+        angle_diff_reward = 2 * (1 - abs(angle_diff/np.pi)*2)
+        
+    previous_vec_ball = np.array([ball_body.previous_position[0] - body.previous_position[0], ball_body.previous_position[1] - body.previous_position[1]])
+    previous_angle_to_ball = np.arctan2(previous_vec_ball[1], previous_vec_ball[0])
+    previous_angle_diff = (previous_angle_to_ball - body.previous_angle + np.pi) % (2*np.pi) - np.pi # back to -pi ; +pi
     
+    delta = (abs(previous_angle_diff) - abs(angle_diff) + np.pi) % (2*np.pi) - np.pi
+    delta_angle_reward = 0
+    if(abs(delta) > (player_rotating_speed * delta_time/1000)/np.pi):
+        delta_angle_reward = 3 * delta / (player_rotating_speed * delta_time/1000)
     
     # Penalize for being out of bounds
     x, y = body.position
     offset = Settings.SCREEN_OFFSET
+    out_of_bound_reward = 0
     if x < offset or x > Settings.DIM_X + offset:
-        reward -= 0 #TODO
+        out_of_bound_reward = 10 #TODO
     
     # Scoring
+    goal_reward = 0
     if(has_scored):
         # goal
         if shape.left_team and left_team_scored:
-            reward += 100
+            goal_reward = 50
         elif (not shape.left_team) and (not left_team_scored):
-            reward += 100
+            goal_reward = 50
         else:
-            reward -= 100
+            goal_reward = 50
     
-    return reward/100
+    static_reward = -1
+    
+    print("------------")
+    print(f"{static_reward=}")
+    print(f"{goal_reward=}")
+    print(f"{out_of_bound_reward=}")
+    print(f"{delta_angle_reward=}")
+    print(f"{angle_diff_reward=}")
+    print(f"{dist_ball_player_reward=}")
+    print(f"{delta_ball_goal_reward=}")
+    print(f"{dist_ball_goal_reward=}")
+    print(f"{delta_ball_player_reward=}")
+            
+    reward = (static_reward + goal_reward + out_of_bound_reward + delta_angle_reward 
+            + angle_diff_reward + dist_ball_player_reward + delta_ball_goal_reward 
+            + delta_ball_player_reward + dist_ball_goal_reward)
+    
+    return reward/10
 
 
 def simulate_episode(
@@ -306,8 +366,6 @@ def simulate_episode(
         # Actions
         actions_t = []
         for i, player in enumerate(players):
-            body, shape = player
-            body.previous_position = body.position
             model = models[i]
             if random.random() < epsilon:
                 action = AIActions.play(game, player, vision=visions[i]) # Random
@@ -359,27 +417,30 @@ def simulate_episode(
 
 
 # Simulation graphique avec un humain
-model = nn.DeepRLNetwork(dimensions=[457, 512, 256, 128, 8])
-models = [nn.load_network(model, "C:/.ingé/Projet-Sport-Co-Networks") for i in range(1)]
+model = nn.DeepRLNetwork(dimensions=[519, 512, 256, 128, 4])
+models = [nn.load_network(model, "C:/.ingé/Projet-Sport-Co-Networks_3") for i in range(1)]
 main(players_number=(1,0), models = models, human=False)
 """
 
-models = [nn.DeepRLNetwork(dimensions=[457, 512, 256, 128, 8]) for i in range(1)]
+models = [nn.DeepRLNetwork(dimensions=[519, 512, 256, 128, 4]) for i in range(1)]
 
 # optimizer : adamax => 
 nn.train_dqn_for_duration(
     players_number=(1,0),
     models=models,
     optimizer_cls=torch.optim.Adam,
-    lr=1e-3,
+    lr=1e-4,
+    epsilon_decay=600,
     simulate_episode=simulate_episode,
     scoring_function = compute_reward,
-    max_duration_s=600,
+    max_duration_s=1200,
+    device="cuda",
+    batch_size=2048,
+    buffer_size=100_000
 )
 
-nn.save_network(models[0], "C:/.ingé/Projet-Sport-Co-Networks")
+nn.save_network(models[0], "C:/.ingé/Projet-Sport-Co-Networks_3")
 """
-
 
 
 

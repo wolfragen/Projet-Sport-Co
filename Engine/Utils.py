@@ -73,6 +73,7 @@ def checkPlayersOut(players: list[tuple]) -> None:
             x = dim_x + offset - 10
             
         body.position = (x, y)
+        body.previous_position = body.position
         
     return
 

@@ -17,10 +17,11 @@ SCORE_COLOR = (255, 215, 0) # text color for the score
 # Terrain :
 DIM_X = 750 # px
 DIM_Y = 500 # px
-GOAL_LEN = 200 # px
+GOAL_LEN = 498 # px
 GROUND_FRICTION = 0.5
 LEFT_GOAL_COLLISION_TYPE = 10 # Necessary to differenciate the left and right goals
 RIGHT_GOAL_COLLISION_TYPE = 11 # Necessary to differenciate the left and right goals
+MAX_DIST = np.sqrt(DIM_X*DIM_Y)
 
 # Murs :
 WALL_FRICTION = 0.9
@@ -49,7 +50,7 @@ PLAYER_ROT_SPEED = np.pi*0.75 # rad/s
 # AI :
 NUMBER_OF_RAYS = 64
 RAY_ANGLE = 2*np.pi # rad, total angle to cover with rayTracing
-VISION_RANGE = DIM_X+SCREEN_OFFSET # Limits the range of rays for rayTracing. "inf" by default here.
+VISION_RANGE = MAX_DIST # Limits the range of rays for rayTracing. "inf" by default here.
 
 
 

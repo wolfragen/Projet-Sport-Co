@@ -36,23 +36,26 @@ def play(game: dict, player: tuple, model: nn.DeepRLNetwork = None, vision: np.a
         vision = Vision.getVision(game, player)
     
     if(model is None):
-        decision_array = random_play(game, player)
+        actions_array = random_play(game, player)
     else:
-        decision_array = model(torch.from_numpy(vision).float()).detach().numpy()
-    print(decision_array)
-    
-    # Map decision outputs to main actions: move forward, rotate left, rotate right, shoot
-    actions_array = [decision_array[0], decision_array[2], decision_array[4], decision_array[6]]
+        actions_array = model(torch.from_numpy(vision).float()).detach().numpy()
     
     body, shape = player
+    ball_body, ball_shape = game["ball"]
     speed = Settings.PLAYER_SPEED
     rotation_speed = Settings.PLAYER_ROT_SPEED
+    can_shoot = Actions.canShoot(body, ball_body)
+    
+    body.previous_position = body.position
+    body.previous_angle = body.angle
+    
+    #print(actions_array)
+    
+    if not can_shoot:
+        actions_array[3] = np.min(actions_array)
     
     # Determine the action with the highest value
-    i_max = actions_array.index(max(actions_array))  # Final decision
-    
-    if(max(actions_array)) == 0:
-        return decision_array
+    i_max = np.argmax(actions_array)  # Final decision
     
     if i_max == 0:
         # Move forward
@@ -68,9 +71,9 @@ def play(game: dict, player: tuple, model: nn.DeepRLNetwork = None, vision: np.a
         
     if i_max == 3:
         # Shoot
-        Actions.shoot(player, game["ball"], power=decision_array[7])
+        Actions.shoot(player, game["ball"])
     
-    return decision_array
+    return actions_array
 
 def random_play(game: dict, player: tuple) -> np.ndarray:
     """
@@ -87,11 +90,11 @@ def random_play(game: dict, player: tuple) -> np.ndarray:
     Returns
     -------
     np.ndarray
-        Array of 8 random floats between 0 and 1 representing action preferences.
+        Array of 4 random floats between 0 and 1 representing action preferences.
     """
     
     # Generate random float values in [0, 1] for each possible action
-    return np.random.rand(8)
+    return np.random.rand(4)
 
 
 
