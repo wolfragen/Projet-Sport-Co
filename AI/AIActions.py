@@ -46,11 +46,6 @@ def play(game: dict, player: tuple, model: nn.DeepRLNetwork = None, vision: np.a
     rotation_speed = Settings.PLAYER_ROT_SPEED
     can_shoot = Actions.canShoot(body, ball_body)
     
-    body.previous_position = body.position
-    body.previous_angle = body.angle
-    
-    #print(actions_array)
-    
     if not can_shoot:
         actions_array[3] = np.min(actions_array)
     

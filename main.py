@@ -80,6 +80,13 @@ def initGame(players_number: list[int,int] = [1,1], score : np.array = np.zeros(
     
     return game
 
+def start_display():
+    global should_continue
+    should_continue = True
+    pygame.init()
+    screen, draw_options = GE.initScreen()
+    return screen, draw_options
+
 def stopGame() -> None:
     """
     Stop the current game and close all active windows.
@@ -98,80 +105,85 @@ def stopGame() -> None:
     return
 
 
-def main(players_number, models: nn.DeepRLNetwork = None, human: bool = True) -> None:
+def main(players_number, models: nn.DeepRLNetwork = None, human: bool = True, display: bool = True, debug: bool = False) -> None:
     """
-    Main game loop.  
-    Handles initialization, player actions (human and AI), physics updates, display refresh, 
-    and game state checks such as goals or out-of-bound players.
+    Main game loop with optional graphical display.
 
-    Returns
-   ----
-    None
-        This function does not return any value.
+    Parameters
+    ----------
+    players_number : list[int,int]
+        Number of players per team.
+    models : list[nn.DeepRLNetwork] or None
+        AI models for each player.
+    human : bool
+        Whether a human is playing.
+    display : bool
+        If True, use Pygame display; if False, run headless.
     """
+    
+    global should_continue
+    should_continue = True
+
     n_players = players_number[0] + players_number[1]
-    
-    if(models is None):
+    if models is None:
         models = [None for i in range(n_players)]
-        
     assert len(models) == n_players
-    
-    pygame.init()
+
     game = initGame(players_number, human=human)
-    screen, draw_options = GE.initScreen()
-    
-    clock = pygame.time.Clock() # Necessary to "force" loop time
-    
-    delta_time = Settings.DELTA_TIME
-    fps = int(1000/delta_time)
-    
-    min_delta_time = 1000/Settings.MAX_FPS # Limits fps
-    
-    time = 0
-    GE.display(game, screen, draw_options) # draw game
-        
-    while(should_continue):
-        
-        PActions.process_events(game, stopGame) # Human actions
-        if(should_continue):
-            
-            human_player = game["selected_player"]
-            ball_body, ball_shape = game["ball"]
-            ball_body.previous_position = ball_body.position
-            
-            for i in range(n_players):
-                player = game["players"][i]
-                model = models[i]
-                
-                if player != human_player:
-                    AIActions.play(game, player, model=model) # AI Actions
-            
-            for step in range(delta_time): # Necessary to avoid tunneling
-                game["space"].step(0.001) # 1 ms at a time
-                
+
+    if display:
+        screen, draw_options = start_display()
+        clock = pygame.time.Clock()
+        delta_time = Settings.DELTA_TIME
+        fps = int(1000/delta_time)
+        min_delta_time = 1000/Settings.MAX_FPS
+        time = 0
+        GE.display(game, screen, draw_options)
+
+    while should_continue:
+        if display:
+            PActions.process_events(game, stopGame)  # human actions
+
+        human_player = game["selected_player"]
+
+        for i in range(n_players):
+            player = game["players"][i]
+            model = models[i]
+            if player != human_player:
+                action_array = AIActions.play(game, player, model=model)
+                if debug:
+                    print(f"{action_array=}")
+
+        # Physics steps
+        for _ in range(Settings.DELTA_TIME):
+            game["space"].step(0.001)
+
+        Actions.reset_movements(game)
+
+        if should_continue and display:
             time += delta_time
-            Actions.reset_movements(game) # Resets velocity for all players
-            
-            if(time >= min_delta_time): # Fps
+            if time >= min_delta_time:
                 GE.display(game, screen, draw_options)
                 time -= min_delta_time
-                
-            clock.tick(fps) # Force the loop to trigger at a certain pace
-            scored = Utils.checkIfGoal(game)
-            
-            for i in range(n_players):
-                player = game["players"][i]
-                print(compute_reward(game, player, scored))
-            
-            Utils.checkPlayersOut(game["players"]) # Checks if players are out of bounds
-            
-            if(bool(scored[0])):
-                new_game = initGame(players_number, game["score"], human=human)
-                game.update(new_game)
-    return
+            clock.tick(fps)
+
+        scored = Utils.checkIfGoal(game)
+        for i in range(n_players):
+            player = game["players"][i]
+            if player != human_player:
+                compute_reward(game, player, scored, debug)
+
+        Utils.checkPlayersOut(game["players"])
+
+        if bool(scored[0]):
+            new_game = initGame(players_number, game["score"], human=human)
+            game.update(new_game)
+
+    if display:
+        pygame.quit()
 
 
-def compute_reward(game: dict, player: tuple[pymunk.Body, pymunk.Shape], scored: tuple[bool,bool]) -> float:
+def compute_reward(game: dict, player: tuple[pymunk.Body, pymunk.Shape], scored: tuple[bool,bool], debug: bool =False) -> float:
     """
     Compute the reward for a given player based on the current game state.
     
@@ -197,8 +209,6 @@ def compute_reward(game: dict, player: tuple[pymunk.Body, pymunk.Shape], scored:
     right_goal = game["right_goal_position"]
     
     offset = Settings.SCREEN_OFFSET
-    dim_x = Settings.DIM_X
-    dim_y = Settings.DIM_Y
     max_dist = Settings.MAX_DIST
     
     delta_time = Settings.DELTA_TIME
@@ -208,7 +218,17 @@ def compute_reward(game: dict, player: tuple[pymunk.Body, pymunk.Shape], scored:
     
     reward = 0.0
         
-    alpha, beta = 1.0, 1  # relative weights
+    alpha, beta = 1.0, 0.5  # relative weights
+    
+    static_reward = -0.5
+    delta_ball_player_coeff = 0
+    dist_ball_player_coeff = 0
+    delta_ball_goal_coeff = 0
+    dist_ball_goal_coeff = 0
+    goal_coeff = 0
+    out_of_bound_coeff = 0
+    delta_angle_coeff = 1
+    angle_diff_coeff = 1
     
     # Distance to ball
     prev_dx = (ball_body.previous_position[0] - body.previous_position[0])
@@ -222,9 +242,9 @@ def compute_reward(game: dict, player: tuple[pymunk.Body, pymunk.Shape], scored:
     delta = prev_dist - curr_dist
     delta_ball_player_reward = 0
     if(abs(delta) > (player_speed * delta_time/1000)/1000):
-        delta_ball_player_reward = 5* delta / (player_speed * delta_time/1000)
+        delta_ball_player_reward = delta_ball_player_coeff* delta / (player_speed * delta_time/1000)
         
-    dist_ball_player_reward = -3* curr_dist/max_dist
+    dist_ball_player_reward = -dist_ball_player_coeff* curr_dist/max_dist
     
     
     # Distance of ball to opponent goal
@@ -248,21 +268,21 @@ def compute_reward(game: dict, player: tuple[pymunk.Body, pymunk.Shape], scored:
     delta = prev_dist - curr_dist
     delta_ball_goal_reward = 0
     if(abs(delta) > (shooting_speed * delta_time/1000)/1000):
-        delta_ball_goal_reward = 10* delta / (shooting_speed * delta_time/1000)
+        delta_ball_goal_reward = delta_ball_goal_coeff* delta / (shooting_speed * delta_time/1000)
         
-    dist_ball_goal_reward = -1* curr_dist/max_dist
+    dist_ball_goal_reward = -dist_ball_goal_coeff* curr_dist/max_dist
         
         
     # Angle between player and ball
     vec_ball = np.array([ball_body.position[0] - body.position[0], ball_body.position[1] - body.position[1]])
     angle_to_ball = np.arctan2(vec_ball[1], vec_ball[0])
     angle_diff = (angle_to_ball - body.angle + np.pi) % (2*np.pi) - np.pi # back to -pi ; +pi
-    max_angle = np.deg2rad(20)
+    max_angle = np.deg2rad(10)
     angle_diff_reward = 0
     if abs(angle_diff) <= max_angle:
-        angle_diff_reward = 2
+        angle_diff_reward = angle_diff_coeff*5
     else:
-        angle_diff_reward = 2 * (1 - abs(angle_diff/np.pi)*2)
+        angle_diff_reward = angle_diff_coeff * (1 - abs(angle_diff/np.pi)*2)
         
     previous_vec_ball = np.array([ball_body.previous_position[0] - body.previous_position[0], ball_body.previous_position[1] - body.previous_position[1]])
     previous_angle_to_ball = np.arctan2(previous_vec_ball[1], previous_vec_ball[0])
@@ -271,42 +291,41 @@ def compute_reward(game: dict, player: tuple[pymunk.Body, pymunk.Shape], scored:
     delta = (abs(previous_angle_diff) - abs(angle_diff) + np.pi) % (2*np.pi) - np.pi
     delta_angle_reward = 0
     if(abs(delta) > (player_rotating_speed * delta_time/1000)/np.pi):
-        delta_angle_reward = 3 * delta / (player_rotating_speed * delta_time/1000)
+        delta_angle_reward = delta_angle_coeff * delta / (player_rotating_speed * delta_time/1000)
     
     # Penalize for being out of bounds
     x, y = body.position
-    offset = Settings.SCREEN_OFFSET
     out_of_bound_reward = 0
-    if x < offset or x > Settings.DIM_X + offset:
-        out_of_bound_reward = 10 #TODO
+    if (x < offset or x > Settings.DIM_X + offset):
+        out_of_bound_reward = -out_of_bound_coeff
     
     # Scoring
     goal_reward = 0
     if(has_scored):
         # goal
         if shape.left_team and left_team_scored:
-            goal_reward = 50
+            goal_reward = goal_coeff
         elif (not shape.left_team) and (not left_team_scored):
-            goal_reward = 50
+            goal_reward = goal_coeff
         else:
-            goal_reward = 50
+            goal_reward = -goal_coeff
     
-    static_reward = -1
-    
-    print("------------")
-    print(f"{static_reward=}")
-    print(f"{goal_reward=}")
-    print(f"{out_of_bound_reward=}")
-    print(f"{delta_angle_reward=}")
-    print(f"{angle_diff_reward=}")
-    print(f"{dist_ball_player_reward=}")
-    print(f"{delta_ball_goal_reward=}")
-    print(f"{dist_ball_goal_reward=}")
-    print(f"{delta_ball_player_reward=}")
-            
     reward = (static_reward + goal_reward + out_of_bound_reward + delta_angle_reward 
             + angle_diff_reward + dist_ball_player_reward + delta_ball_goal_reward 
             + delta_ball_player_reward + dist_ball_goal_reward)
+    if(debug):
+        print("------------")
+        if(static_reward != 0): print(f"{static_reward=}")
+        if(goal_reward != 0): print(f"{goal_reward=}")
+        if(out_of_bound_reward != 0): print(f"{out_of_bound_reward=}")
+        if(delta_angle_reward != 0): print(f"{delta_angle_reward=}")
+        if(angle_diff_reward != 0): print(f"{angle_diff_reward=}")
+        if(dist_ball_player_reward != 0): print(f"{dist_ball_player_reward=}")
+        if(delta_ball_goal_reward != 0): print(f"{delta_ball_goal_reward=}")
+        if(dist_ball_goal_reward != 0): print(f"{dist_ball_goal_reward=}")
+        if(delta_ball_player_reward != 0): print(f"{delta_ball_player_reward=}")
+        print(f"TOTAL REWARD = {reward}")
+    
     
     return reward/10
 
@@ -316,27 +335,33 @@ def simulate_episode(
     models: list[nn.DeepRLNetwork],
     max_steps: int,
     scoring_function: Callable[[dict, tuple[pymunk.Body, pymunk.Shape], bool], float],
-    epsilon: float = 0.0
+    epsilon: float = 0.0,
+    display: bool = False,
+    screen=None,
+    draw_options=None,
     ) -> list[dict]:
     """
     Run one full simulation episode and collect experience tuples for DeepRL training.
 
     Parameters
-   -------
+    ----------
+    players_number : list[int,int]
+        Number of players per team.
+    models : list[nn.DeepRLNetwork]
+        AI models for each player.
     max_steps : int
         Maximum number of timesteps to simulate.
     scoring_function : Callable
         Function that computes the reward for a given player.
+    epsilon : float
+        Probability of taking random action.
+    display : bool
+        If True, shows the game via Pygame.
 
     Returns
-   ----
-    experiences : list of dict
-        Each element corresponds to one player's trajectory, containing:
-            'states'       : np.ndarray of shape (T, input_dim)
-            'actions'      : np.ndarray of shape (T, output_dim)
-            'rewards'      : np.ndarray of shape (T,)
-            'next_states'  : np.ndarray of shape (T, input_dim)
-            'dones'        : np.ndarray of shape (T,)
+    -------
+    experiences : list[dict]
+        Each element corresponds to one player's trajectory.
     """
 
     # Initialization
@@ -344,68 +369,71 @@ def simulate_episode(
     players = game["players"]
     n_players = len(players)
 
+    if should_continue and display:
+        GE.display(game, screen, draw_options)
+        clock = pygame.time.Clock()
+        delta_time = Settings.DELTA_TIME
+        fps = int(1000/delta_time)
+        min_delta_time = 1000/Settings.MAX_FPS
+        time = 0
+
     # Store experience per player
     experiences = [
-        {
-            "states": [],
-            "actions": [],
-            "rewards": [],
-            "next_states": [],
-            "dones": []
-        }
-        for id_player in range(n_players)
+        {"states": [], "actions": [], "rewards": [], "next_states": [], "dones": []}
+        for _ in range(n_players)
     ]
 
-    # Precompute initial vision (avoid recomputing unnecessarily)
     visions = [Vision.getVision(game, p) for p in players]
 
     for step in range(max_steps):
-        ball_body, ball_shape = game["ball"]
-        ball_body.previous_position = ball_body.position
-        
         # Actions
         actions_t = []
         for i, player in enumerate(players):
             model = models[i]
             if random.random() < epsilon:
-                action = AIActions.play(game, player, vision=visions[i]) # Random
+                action = AIActions.play(game, player, vision=visions[i])  # random
             else:
                 action = AIActions.play(game, player, model=model, vision=visions[i])
             actions_t.append(action)
 
         # Physics step
-        for step in range(Settings.DELTA_TIME):
+        for _ in range(Settings.DELTA_TIME):
             game["space"].step(0.001)
 
         Actions.reset_movements(game)
         scored = Utils.checkIfGoal(game)
-        done = bool(scored[0]) # episode ends when a goal is scored
-        Utils.checkPlayersOut(players)
+        done = bool(scored[0])
 
         # Compute rewards & next states
         for i, player in enumerate(players):
             reward = scoring_function(game, player, scored)
             reward = np.float32(reward)
-            if(reward is None): print(reward)
-
             next_vision = Vision.getVision(game, player)
 
-            # Store experience
             exp = experiences[i]
             exp["states"].append(visions[i])
             exp["actions"].append(actions_t[i])
             exp["rewards"].append(reward)
             exp["next_states"].append(next_vision)
             exp["dones"].append(done)
-
-            # Update cached vision
             visions[i] = next_vision
 
-        # End simulation early if goal scored
+        Utils.checkPlayersOut(players)
+
+
+        if should_continue and display:
+            PActions.process_events(game, stopGame)  # human actions
+            if should_continue:
+                time += delta_time
+                if time >= min_delta_time:
+                    GE.display(game, screen, draw_options)
+                    time -= min_delta_time
+                clock.tick(fps)
+
         if done:
             break
 
-    # Convert lists to NumPy arrays for efficient training
+    # Convert lists to arrays
     for exp in experiences:
         exp["states"] = np.array(exp["states"], dtype=np.float32)
         exp["actions"] = np.array(exp["actions"], dtype=np.float32)
@@ -416,31 +444,43 @@ def simulate_episode(
     return experiences
 
 
-# Simulation graphique avec un humain
-model = nn.DeepRLNetwork(dimensions=[519, 512, 256, 128, 4])
-models = [nn.load_network(model, "C:/.ingé/Projet-Sport-Co-Networks_3") for i in range(1)]
-main(players_number=(1,0), models = models, human=False)
-"""
 
-models = [nn.DeepRLNetwork(dimensions=[519, 512, 256, 128, 4]) for i in range(1)]
 
-# optimizer : adamax => 
-nn.train_dqn_for_duration(
-    players_number=(1,0),
-    models=models,
-    optimizer_cls=torch.optim.Adam,
-    lr=1e-4,
-    epsilon_decay=600,
-    simulate_episode=simulate_episode,
-    scoring_function = compute_reward,
-    max_duration_s=1200,
-    device="cuda",
-    batch_size=2048,
-    buffer_size=100_000
-)
 
-nn.save_network(models[0], "C:/.ingé/Projet-Sport-Co-Networks_3")
-"""
+if(__name__ == "__main__"):
+    
+    """
+    # Simulation graphique avec un humain
+    model = nn.DeepRLNetwork(dimensions=[Settings.ENTRY_NEURONS, 512, 256, 128, 4])
+    models = [nn.load_network(model, "C:/.ingé/Projet-Sport-Co-Networks") for i in range(2)]
+    main(players_number=(1,1), models=models, human=True, debug=True)
+    """
+    
+    models = [nn.DeepRLNetwork(dimensions=[Settings.ENTRY_NEURONS, 512, 256, 128, 4]) for i in range(1)]
+    
+    # optimizer : adamax => 
+    nn.train_dqn_for_duration(
+        players_number=(1,0),
+        models=models,
+        optimizer_cls=torch.optim.Adam,
+        lr=1e-4,
+        epsilon_decay=600,
+        simulate_episode=simulate_episode,
+        scoring_function = compute_reward,
+        max_duration_s=300,
+        device="cpu",
+        batch_size=512,
+        buffer_size=50_000,
+        display=False,
+        start_display=start_display,
+        initial_calls = 25,
+        max_calls = 1000,
+        steps_growth_rate = 1.005,
+        delay_params = 50,
+    )
+    
+    nn.save_network(models[0], "C:/.ingé/Projet-Sport-Co-Networks")
+    
 
 
 

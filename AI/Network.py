@@ -13,6 +13,7 @@ import torch.nn.functional as F
 import numpy as np
 from collections import deque
 import copy
+import pygame
 import math
 
 
@@ -81,7 +82,7 @@ def load_network(network: DeepRLNetwork, path: str, device: str = "cpu"):
     device : str
         Device to load the network on ("cpu" or "cuda").
     """
-    network.load_state_dict(torch.load(path, map_location=device))
+    network.load_state_dict(torch.load(path, map_location=device, weights_only=True))
     network.to(device)
     return network
 
@@ -101,11 +102,18 @@ def train_dqn_for_duration(
     epsilon_start: float = 1.0,
     epsilon_final: float = 0.05,
     epsilon_decay: int = 10_000,
+    initial_calls: int = 100,
+    max_calls: int = 10000,
+    steps_growth_rate: int = 1.01,
+    delay_params: int = 20,
     batch_size: int = 64,
+    min_batch_size: int = 32,
     nb_batches: int = 10,
     buffer_size: int = 50_000,
     device: str = "cuda" if torch.cuda.is_available() else "cpu",
-    cpu_sync_interval: int = 5,
+    cpu_sync_interval: int = 20,
+    display: bool = False,
+    start_display: callable=None,
 ) -> None:
     """
     Train a Deep Q-Network using experience replay for a given duration.
@@ -162,15 +170,26 @@ def train_dqn_for_duration(
     optimizers = [optimizer_cls(model.parameters(), lr=lr) for model in models]
     epsilon = epsilon_start
     epsilon_decay_rate = (epsilon_start - epsilon_final) / epsilon_decay
+    
+    calls_per_game = initial_calls
 
     start_time = time.time()
     steps = 0
+    
+    temp_batch_size = batch_size
+    
+    screen = None
+    draw_options = None
+    if display:
+        screen, draw_options = start_display()
 
     print(f"Starting training on {device.upper()} for {max_duration_s} seconds...\n")
 
     while (time.time() - start_time) < max_duration_s:
         # Simulate one full episode
-        episode_data = simulate_episode(players_number, models=models, max_steps=1000, scoring_function=scoring_function, epsilon=epsilon)
+        episode_data = simulate_episode(players_number, models=models, max_steps=calls_per_game, 
+                        scoring_function=scoring_function, epsilon=epsilon,
+                        display=display, screen=screen, draw_options = draw_options)
         
         for player_id in range(len(models)):
             player_data = episode_data[player_id]
@@ -189,11 +208,12 @@ def train_dqn_for_duration(
             
             # Skip until we have enough samples
             if len(replay_buffer) < batch_size*nb_batches:
-                continue
+                if(math.floor(len(replay_buffer)/nb_batches) < min_batch_size): continue
+                temp_batch_size = math.floor(len(replay_buffer)/nb_batches)
             
             for i in range(nb_batches):
                 # Sample a random minibatch
-                batch = random.sample(replay_buffer, batch_size)
+                batch = random.sample(replay_buffer, temp_batch_size)
                 s_batch, a_batch, r_batch, ns_batch, d_batch = zip(*batch)
                 
                 # Convert to tensors
@@ -226,8 +246,11 @@ def train_dqn_for_duration(
                 loss.backward()
                 optimizer.step()
             
-        epsilon = max(epsilon_final, epsilon - epsilon_decay_rate)
         steps += 1
+        temp_batch_size = batch_size
+        if(steps > delay_params):
+            epsilon = max(epsilon_final, epsilon - epsilon_decay_rate)
+            calls_per_game = round(min(initial_calls * (steps_growth_rate ** (steps-delay_params)), max_calls))
             
         if(steps % cpu_sync_interval == 0):
             for model_id in range(len(models)):
@@ -238,6 +261,9 @@ def train_dqn_for_duration(
             print(f"[{elapsed:.1f}s] Steps: {steps}, Loss: {loss.item():.8f}")
 
     print("\nTraining finished.")
+    
+    if display:
+        pygame.quit()
     return
     
     

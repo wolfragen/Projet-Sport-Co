@@ -149,7 +149,7 @@ def getVision(game: dict, player: tuple[pymunk.Body, pymunk.Shape]) -> np.ndarra
     """
     
     number_of_rays = Settings.NUMBER_OF_RAYS
-    vision_array = np.zeros(number_of_rays * 8 + 7, dtype=np.float32)
+    vision_array = np.zeros(Settings.ENTRY_NEURONS, dtype=np.float32)
 
     # Player, ball, and goals positions
     body, shape = player
