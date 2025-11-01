@@ -31,7 +31,7 @@ import pymunk
 import Settings
 
 
-def rayTracing(game: dict, player: tuple[pymunk.Body, pymunk.Shape]) -> tuple[np.ndarray, np.ndarray]:
+def rayTracing(space, player: tuple[pymunk.Body, pymunk.Shape]) -> tuple[np.ndarray, np.ndarray]:
     """
     Perform raycasting from a player's position and convert it into a flattened vision array.
 
@@ -65,7 +65,6 @@ def rayTracing(game: dict, player: tuple[pymunk.Body, pymunk.Shape]) -> tuple[np
     """
     
     body, shape = player
-    space = game["space"]
 
     number_of_rays = Settings.NUMBER_OF_RAYS
     fov = Settings.RAY_ANGLE
@@ -126,45 +125,24 @@ def rayTracing(game: dict, player: tuple[pymunk.Body, pymunk.Shape]) -> tuple[np
     return vision_array
 
 
-def getVision(game: dict, player: tuple[pymunk.Body, pymunk.Shape]) -> np.ndarray:
-    """
-    Construct the complete vision vector for a player, including positions and ray tracing.
+def getVision(space, player: tuple[pymunk.Body, pymunk.Shape], ball, left_goal_position, right_goal_position) -> np.ndarray:
 
-    Parameters
-    ----------
-    game : dict
-        Current game state containing players, ball, and goals.
-    player : tuple (pymunk.Body, pymunk.Shape)
-        Player for which vision is computed.
-
-    Returns
-    -------
-    vision_array : np.ndarray, shape (NUMBER_OF_RAYS*7 + 8,)
-        Complete observation vector containing:
-            - Player position (x, y) + orientation
-            - Ball position (x, y)
-            - Left goal center position (x, y)
-            - Right goal center position (x, y)
-            - Ray distances and one-hot entity types (NUMBER_OF_RAYS*7)
-    """
-    
-    number_of_rays = Settings.NUMBER_OF_RAYS
     vision_array = np.zeros(Settings.ENTRY_NEURONS, dtype=np.float32)
 
     # Player, ball, and goals positions
     body, shape = player
-    ball_body, _ = game["ball"]
+    ball_body, _ = ball
     
     # Normalize positions by the field dimensions
     dim_x = Settings.DIM_X
     dim_y = Settings.DIM_Y
     vision_array[0] = body.angle / (2*np.pi)
     vision_array[1:3] = (ball_body.position[0] - body.position[0]) / dim_x, (ball_body.position[1] - body.position[1]) / dim_y
-    vision_array[3:5] = (game["left_goal_position"][0] - body.position[0]) / dim_x, (game["left_goal_position"][1] - body.position[1]) / dim_y
-    vision_array[5:7] = (game["right_goal_position"][0] - body.position[0]) / dim_x, (game["right_goal_position"][1] - body.position[1]) / dim_y
+    vision_array[3:5] = (left_goal_position[0] - body.position[0]) / dim_x, (left_goal_position[1] - body.position[1]) / dim_y
+    vision_array[5:7] = (right_goal_position[0] - body.position[0]) / dim_x, (right_goal_position[1] - body.position[1]) / dim_y
 
     # Normalize ray distances and copy one-hot info
-    ray_data = rayTracing(game, player)
+    ray_data = rayTracing(space, player)
     ray_data[::8] = ray_data[::8] / dim_x
     ray_data[1::8] = ray_data[1::8] / dim_y
     vision_array[7:] = ray_data.flatten()

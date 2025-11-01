@@ -11,7 +11,7 @@ import pymunk
 
 import Settings
 
-def reset_movements(game: dict) -> None:
+def reset_movements(players) -> None:
     """
     Reset all player movements by stopping their current velocity.
 
@@ -27,7 +27,7 @@ def reset_movements(game: dict) -> None:
     """
     
     # Iterate over all players and reset their movement
-    for player in game.get("players", []):
+    for player in players:
         move(player, speed=0, rotation_speed=0)
     
     return

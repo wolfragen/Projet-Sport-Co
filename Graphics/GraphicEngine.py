@@ -7,9 +7,8 @@ Created on Sat Oct 11 16:35:38 2025
 
 import pygame
 import pymunk
-import numpy as np
+import pymunk.pygame_util
 from PIL import Image, ImageDraw, ImageFont
-from random import randint
 
 import Settings
 
@@ -43,6 +42,27 @@ def initScreen():
     # Return both display surface and drawing configuration
     return screen, draw_options
 
+def startDisplay():
+    pygame.init()
+    screen, draw_options = initScreen()
+    return screen, draw_options
+
+
+def display(space, players, score, screen: pygame.Surface, draw_options: "pymunk.pygame_util.DrawOptions") -> None:
+    # Clear the screen to a blank state
+    clear_screen(screen)
+    
+    # Draw all game objects, including players and arrows
+    draw_objects(space, players, draw_options, screen)
+    
+    # Draw the current score
+    draw_score(score, screen)
+    
+    # Update the full display surface to the screen
+    pygame.display.flip()
+    
+    return
+
 
 def clear_screen(screen: pygame.Surface):
     """
@@ -64,27 +84,7 @@ def clear_screen(screen: pygame.Surface):
     return
 
 
-def draw_objects(game: dict, draw_options: "pymunk.pygame_util.DrawOptions", screen: pygame.Surface) -> None:
-    """
-    Draws all game objects on the screen, including players with their directional arrows.
-
-    Parameters
-    ----------
-    game : dict
-        The game state dictionary containing physics space and all objects.
-    draw_options : pymunk.pygame_util.DrawOptions
-        Pymunk draw options for rendering shapes.
-    screen : pygame.Surface
-        The Pygame surface to draw on.
-
-    Returns
-    -------
-    None
-        The function draws directly on the screen; does not return anything.
-    """
-
-    space = game["space"]
-    
+def draw_objects(space, players, draw_options: "pymunk.pygame_util.DrawOptions", screen: pygame.Surface) -> None:
     # Draw all shapes using pymunk debug draw
     space.debug_draw(draw_options)
     
@@ -92,7 +92,7 @@ def draw_objects(game: dict, draw_options: "pymunk.pygame_util.DrawOptions", scr
     arrow_size = Settings.PLAYER_LEN / 4
     
     # Draw players and their directional arrows
-    for body, shape in game.get("players", []):
+    for body, shape in players:
         # Draw the player's square body
         points = [p.rotated(body.angle) + body.position for p in shape.get_vertices()]
         pygame.draw.polygon(screen, shape.color, points)
@@ -118,345 +118,8 @@ def draw_objects(game: dict, draw_options: "pymunk.pygame_util.DrawOptions", scr
     return
 
 
-def display(game: dict, screen: pygame.Surface, draw_options: "pymunk.pygame_util.DrawOptions") -> None:
-    """
-    Refresh the game display: clears the screen, draws all objects, shows the score, and updates the display.
-
-    Parameters
-    ----------
-    game : dict
-        The current game state dictionary containing players, ball, and scores.
-    screen : pygame.Surface
-        The Pygame surface to draw on.
-    draw_options : pymunk.pygame_util.DrawOptions
-        Pymunk draw options for rendering shapes.
-
-    Returns
-    -------
-    None
-        Draws directly to the screen; does not return a value.
-    """
-
-    # Clear the screen to a blank state
-    clear_screen(screen)
-    
-    # Draw all game objects, including players and arrows
-    draw_objects(game, draw_options, screen)
-    
-    # Draw the current score
-    draw_score(game, screen)
-    
-    # Update the full display surface to the screen
-    pygame.display.flip()
-    
-    return
-
-
-def buildBoard(game: dict) -> None:
-    """
-    Builds the game field including walls, goals, and invisible goal sensors for AI vision.
-
-    Parameters
-    ----------
-    game : dict
-        The game state dictionary containing at least a 'space' key with the Pymunk space.
-
-    Returns
-    -------
-    None
-        Modifies the 'space' inside the game dictionary by adding static walls and goal sensors.
-    """
-
-    space = game["space"]
-    static_body = space.static_body
-
-    # Field parameters
-    offset = Settings.SCREEN_OFFSET
-    width = Settings.DIM_X
-    height = Settings.DIM_Y
-    goal_len = Settings.GOAL_LEN
-
-    # Top and bottom lines
-    top_line = (offset, offset), (offset + width, offset)
-    bottom_line = (offset, offset + height), (offset + width, offset + height)
-
-    # Vertical sides with goal openings
-    left_top_goal = offset + (height - goal_len)/2
-    left_bottom_goal = offset + (height + goal_len)/2
-    right_top_goal = offset + (height - goal_len)/2
-    right_bottom_goal = offset + (height + goal_len)/2
-
-    # Static walls
-    static_lines = [
-        # Top and bottom
-        pymunk.Segment(static_body, top_line[0], top_line[1], 0.0),
-        pymunk.Segment(static_body, bottom_line[0], bottom_line[1], 0.0),
-
-        # Left side with goal opening
-        pymunk.Segment(static_body, (offset, offset), (offset, left_top_goal), 0.0),
-        pymunk.Segment(static_body, (offset, left_bottom_goal), (offset, offset + height), 0.0),
-
-        # Right side with goal opening
-        pymunk.Segment(static_body, (offset + width, offset), (offset + width, right_top_goal), 0.0),
-        pymunk.Segment(static_body, (offset + width, right_bottom_goal), (offset + width, offset + height), 0.0),
-    ]
-
-    # Set elasticity and friction for walls
-    for line in static_lines:
-        line.elasticity = Settings.WALL_ELASTICITY
-        line.friction = Settings.WALL_FRICTION
-
-    space.add(*static_lines)
-
-    # === Invisible goal sensors for AI vision ===
-    left_goal_sensor = pymunk.Segment(
-        static_body,
-        (offset, left_top_goal),
-        (offset, left_bottom_goal),
-        1.0
-    )
-    right_goal_sensor = pymunk.Segment(
-        static_body,
-        (offset + width, right_top_goal),
-        (offset + width, right_bottom_goal),
-        1.0
-    )
-
-    # Sensors do not collide
-    left_goal_sensor.sensor = True
-    right_goal_sensor.sensor = True
-
-    # Assign collision types for AI recognition
-    left_goal_sensor.collision_type = Settings.LEFT_GOAL_COLLISION_TYPE
-    right_goal_sensor.collision_type = Settings.RIGHT_GOAL_COLLISION_TYPE
-
-    # Make invisible for debug draw
-    left_goal_sensor.color = (0, 0, 0, 0)
-    right_goal_sensor.color = (0, 0, 0, 0)
-
-    space.add(left_goal_sensor, right_goal_sensor)
-
-    # Save goal center positions for reference
-    game["left_goal_position"] = (offset, (left_bottom_goal + left_top_goal)/2)
-    game["right_goal_position"] = (offset + width, (right_bottom_goal + right_top_goal)/2)
-
-    return
-
-
-def buildBall(game: dict, random_ball_position: bool = True) -> None:
-    """
-    Creates the ball in the center of the field with physical properties and adds it to the game space.
-
-    Parameters
-    ----------
-    game : dict
-        The game state dictionary containing at least a 'space' key with the Pymunk space.
-
-    Returns
-    -------
-    None
-        Adds the ball body and shape to the Pymunk space and updates the 'ball' key in the game dictionary.
-    """
-
-    space = game["space"]
-
-    # Ball parameters
-    radius = Settings.BALL_RADIUS
-    mass = Settings.BALL_MASS
-    dim_x = Settings.DIM_X
-    dim_y = Settings.DIM_Y
-    offset = Settings.SCREEN_OFFSET
-
-    # Calculate moment of inertia
-    moment = pymunk.moment_for_circle(mass, 0, radius)
-
-    # Dynamic body for the ball
-    body = pymunk.Body(mass, moment)
-    if(random_ball_position):
-        body.position = (
-            randint(round(offset +dim_x *1/10), round(offset +dim_x *9/10)),
-            randint(round(offset +dim_y *1/10), round(offset +dim_y *9/10))
-        )  # random position
-    else:
-        body.position = (
-            offset +dim_x / 2,
-            offset + dim_y / 2
-        )  # center of the field
-    body.previous_position = body.position
-
-    # Circle shape for the ball
-    shape = pymunk.Circle(body, radius)
-    shape.elasticity = Settings.BALL_ELASTICITY
-    shape.friction = Settings.BALL_FRICTION
-    shape.color = Settings.BALL_COLOR
-
-    # Tag for ray tracing or identification
-    shape.is_ball = True
-
-    # Add to space and update game dictionary
-    space.add(body, shape)
-    game["ball"] = (body, shape)
-    
-    return
-
-
-def buildPlayers(game: dict, players_number: list[int,int], human: bool, dim_x: float = Settings.DIM_X, dim_y: float = Settings.DIM_Y) -> None:
-    """
-    Creates the player bodies and shapes for a 1v1 game and adds them to the Pymunk space.
-
-    Parameters
-    ----------
-    game : dict
-        The game state dictionary containing at least a 'space' key with the Pymunk space.
-    dim_x : float, optional
-        Width of the field, default is Settings.DIM_X.
-    dim_y : float, optional
-        Height of the field, default is Settings.DIM_Y.
-
-    Returns
-    -------
-    None
-        Adds player bodies and shapes to the Pymunk space and updates the corresponding keys in the game dictionary:
-        'players', 'players_left', 'players_right', and 'selected_player'.
-    """
-
-    space = game["space"]
-    offset = Settings.SCREEN_OFFSET
-
-    # Player parameters
-    size = Settings.PLAYER_LEN
-    mass = Settings.PLAYER_MASS
-
-    def create_square(pos: tuple[float, float], angle: float, left_team: bool) -> tuple[pymunk.Body, pymunk.Poly]:
-        """
-        Helper function to create a square player with given position, angle, and team.
-        """
-        color = Settings.PLAYER_LEFT_COLOR if left_team else Settings.PLAYER_RIGHT_COLOR
-        moment = pymunk.moment_for_box(mass, (size, size))
-        body = pymunk.Body(mass, moment)
-        body.position = pos
-        body.previous_posisiton = pos
-        body.angle = angle
-
-        shape = pymunk.Poly.create_box(body, (size, size))
-        shape.elasticity = Settings.PLAYER_ELASTICITY
-        shape.friction = Settings.PLAYER_FRICTION
-        shape.color = color
-        shape.is_player = True
-        shape.left_team = left_team
-
-        return body, shape
-    
-    def spacing(n_players, size, offset_x, offset_y, dim_x, dim_y, revert_x=False):
-        """
-        Compute player positions with:
-        - Equal spacing between players and walls
-        - Symmetry on Y-axis
-        - Balanced X-axis
-        - Optionally revert columns (first column becomes last)
-        - Per-column vertical centering
-        """
-        # --- Determine best cols/rows ---
-        best_diff = float('inf')
-        best_cols, best_rows = None, None
-    
-        for cols in range(1, n_players + 1):
-            rows = int(np.ceil(n_players / cols))
-            spacing_x = dim_x / (cols + 1)
-            spacing_y = dim_y / (rows + 1)
-            diff = abs(spacing_x - spacing_y)
-            if diff < best_diff:
-                best_diff = diff
-                best_cols, best_rows = cols, rows
-    
-        cols = best_cols
-        spacing_x = dim_x / (cols + 1)
-    
-        # --- Determine players per column ---
-        base_count = n_players // cols
-        extra = n_players % cols
-        col_counts = [base_count + 1 if i < extra else base_count for i in range(cols)]
-    
-        # --- X coordinates per column ---
-        x_coords = np.linspace(spacing_x, spacing_x * cols, cols)
-    
-        # --- Reverse columns if needed ---
-        if revert_x:
-            x_coords = x_coords[::-1]
-    
-        # --- Assign positions per column ---
-        positions = []
-        for x, n_in_col in zip(x_coords, col_counts):
-            y_coords = np.linspace(dim_y / (n_in_col + 1), dim_y * n_in_col / (n_in_col + 1), n_in_col)
-            x_col = np.full(n_in_col, x)
-            positions.append(np.column_stack([x_col, y_coords]))
-    
-        positions = np.vstack(positions)
-    
-        # --- Mirror Y-axis for symmetry ---
-        center_y = dim_y / 2
-        mirrored_y = 2 * center_y - positions[:, 1]
-        positions_sym_y = np.vstack([positions, np.column_stack([positions[:, 0], mirrored_y])])
-    
-        # --- Take only first n_players ---
-        positions_final = positions_sym_y[:n_players]
-    
-        # --- Apply offset ---
-        positions_final += np.array([offset_x, offset_y])
-    
-        return positions_final
-
-    n_left, n_right = players_number
-    left_players = []
-    right_players = []
-    
-    left_positions = spacing(n_left, size, offset, offset, dim_x/2, dim_y)
-
-    for i in range(n_left):
-        pos = left_positions[i]
-        left_players.append(create_square(pos.tolist(), angle=0, left_team=True))
-        
-    if(n_right != 0):
-        right_positions = spacing(n_right, size, dim_x/2+offset, offset, dim_x/2, dim_y, revert_x=True)
-        for i in range(n_right):
-            pos = right_positions[-i]
-            right_players.append(create_square(pos.tolist(), angle=np.pi, left_team=False))
-
-    # Flatten the lists
-    left_flat = [item for pair in left_players for item in pair]
-    right_flat = [item for pair in right_players for item in pair]
-
-    # Add to space and update game dictionary
-    space.add(*left_flat, *right_flat)
-    game["players"] = left_players + right_players
-    game["players_left"] = left_players
-    game["players_right"] = right_players
-    if(human):
-        game["selected_player"] = left_players[0]
-    else:
-        game["selected_player"] = None
-
-    return
-
-
-def draw_score(game: dict, screen: pygame.Surface) -> None:
-    """
-    Draws the current score on the screen using PIL for text rendering.
-
-    Parameters
-    ----------
-    game : dict
-        Game state dictionary containing the 'score' key as a 2-element array.
-    screen : pygame.Surface
-        The Pygame surface on which to draw the score.
-
-    Returns
-    -------
-    None
-        The function draws the score on the screen and does not return anything.
-    """
-
-    score_left, score_right = game["score"]
+def draw_score(score, screen: pygame.Surface) -> None:
+    score_left, score_right = score
     text = f"{score_left}   -   {score_right}"
     text_color = Settings.SCORE_COLOR
 

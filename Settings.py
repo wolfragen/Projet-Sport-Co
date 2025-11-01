@@ -34,6 +34,8 @@ BALL_FRICTION = 0.2
 BALL_ELASTICITY = 0.8
 BALL_COLOR = (255, 255, 255, 255)
 
+RANDOM_BALL_POSITION = True
+
 # Player (square) : 
 PLAYER_LEN = 30 # px
 PLAYER_MASS = 1 # kg, useful for collisions with the ball
@@ -48,7 +50,7 @@ PLAYER_SPEED = 100 # px/s
 PLAYER_ROT_SPEED = np.pi*0.75 # rad/s
 
 # AI :
-NUMBER_OF_RAYS = 64
+NUMBER_OF_RAYS = 0
 RAY_ANGLE = 2*np.pi # rad, total angle to cover with rayTracing
 VISION_RANGE = MAX_DIST # Limits the range of rays for rayTracing. "inf" by default here.
 ENTRY_NEURONS = NUMBER_OF_RAYS*8 + 7
