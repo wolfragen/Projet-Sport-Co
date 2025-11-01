@@ -11,7 +11,7 @@ import pymunk
 
 import Settings
 
-def reset_movements(game: dict) -> None:
+def reset_movements(players) -> None:
     """
     Reset all player movements by stopping their current velocity.
 
@@ -27,7 +27,7 @@ def reset_movements(game: dict) -> None:
     """
     
     # Iterate over all players and reset their movement
-    for player in game.get("players", []):
+    for player in players:
         move(player, speed=0, rotation_speed=0)
     
     return
@@ -53,6 +53,10 @@ def move(entity: tuple[pymunk.Body, pymunk.Shape], speed: float = 0, rotation_sp
     
     body, shape = entity
     angle = body.angle
+    
+    if(speed != 0 or rotation_speed != 0):
+        body.previous_position = body.position
+        body.previous_angle = body.angle
 
     # Compute velocity components along the entity's facing direction
     vx = speed * math.cos(angle)
@@ -89,6 +93,9 @@ def shoot(player: tuple[pymunk.Body, pymunk.Shape],
     
     ball_body, ball_shape = ball
     player_body, player_shape = player
+    
+    player_body.previous_position = player_body.position
+    player_body.previous_angle = player_body.angle
     
     # Only allow shooting if ball is reachable
     if not canShoot(player_body, ball_body):

@@ -5,42 +5,35 @@ Created on Sun Oct 12 14:23:39 2025
 @author: quent
 """
 
+import pymunk
+
 import Settings
 
 
-def checkIfGoal(game: dict) -> tuple[bool,bool]:
-    """
-    Checks if a goal has been scored and by which team.  
+def createSpace():
+    space = pymunk.Space() # Physics simulation space
+    space.damping = Settings.GROUND_FRICTION # Simulate the friction with the ground
+    return space
 
-    Parameters
-    ----------
-    game : dict
-        Current game state containing ball position, score, and other entities.
 
-    Returns
-    -------
-    bool
-        True if a goal was scored, false otherwise.
-    bool
-        True if left team scored, False if right team scored, None otherwise.
-    """
+def checkIfGoal(ball, score) -> bool:
     
-    body, shape = game["ball"]
+    body, shape = ball
     ball_x = body.position[0]
     dim_x = Settings.DIM_X
     offset = Settings.SCREEN_OFFSET
     
     if ball_x < offset:
         # Goal scored by right team
-        game["score"][1] += 1
-        return (True, False)
+        score[1] += 1
+        return True
     
     elif ball_x > dim_x + offset:
         # Goal scored by left team
-        game["score"][0] += 1
-        return (True, True)
+        score[0] += 1
+        return True
     
-    return (False, None)
+    return False
 
 
 def checkPlayersOut(players: list[tuple]) -> None:
@@ -73,8 +66,9 @@ def checkPlayersOut(players: list[tuple]) -> None:
             x = dim_x + offset - 10
             
         body.position = (x, y)
+        body.previous_position = body.position
         
-    return
+    return 
 
 
 

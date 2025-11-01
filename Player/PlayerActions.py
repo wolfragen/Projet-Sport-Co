@@ -6,13 +6,9 @@ Created on Sat Oct 11 18:44:53 2025
 """
 
 import pygame
-from typing import Callable
-
-import Settings
-from Engine import Actions
 
 
-def process_events(game: dict, stopGame: Callable[[], None]) -> None:
+def process_events() -> None:
     """
     Processes user input events and applies actions to the selected player.
     
@@ -35,32 +31,27 @@ def process_events(game: dict, stopGame: Callable[[], None]) -> None:
     # Handle quit events
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
-            stopGame()
-            return
+            return True, -1
 
     keys = pygame.key.get_pressed()
-    selected_player = game["selected_player"]
-    body, shape = selected_player
-    speed = Settings.PLAYER_SPEED
-    rotation_speed = Settings.PLAYER_ROT_SPEED
-
-    # Forward movement
-    if keys[pygame.K_w]:
-        Actions.move(selected_player, speed=speed)
-
-    # Rotate left
-    if keys[pygame.K_a]:
-        Actions.move(selected_player, rotation_speed=-rotation_speed)
-
-    # Rotate right
-    if keys[pygame.K_d]:
-        Actions.move(selected_player, rotation_speed=rotation_speed)
 
     # Shoot the ball
     if keys[pygame.K_SPACE]:
-        Actions.shoot(selected_player, game["ball"])
+        return False,3
+    
+    # Rotate left
+    if keys[pygame.K_a]:
+        return False,1
+
+    # Rotate right
+    if keys[pygame.K_d]:
+        return False,2
+    
+    # Forward movement
+    if keys[pygame.K_w]:
+        return False,0
         
-    return
+    return False, -1
         
 
 
