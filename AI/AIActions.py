@@ -35,19 +35,23 @@ def play(player, ball, action) -> np.array:
     
     if action == 0:
         # Move forward
-        Actions.move(player, speed=speed)  # TODO variable speed? decision_array[1]
+        Actions.move(player, speed=speed)  # TODO variable speed?
         
     if action == 1:
         # Rotate left
-        Actions.move(player, rotation_speed=-rotation_speed)  # TODO variable speed? decision_array[3]
+        Actions.move(player, rotation_speed=-rotation_speed)  # TODO variable speed?
         
     if action == 2:
         # Rotate right
-        Actions.move(player, rotation_speed=rotation_speed)  # TODO variable speed? decision_array[5]
+        Actions.move(player, rotation_speed=rotation_speed)  # TODO variable speed?
         
     if action == 3:
         # Shoot
         Actions.shoot(player, ball)
+        
+    if action == 4:
+        # Move backward
+        Actions.move(player, speed=-speed) # TODO variable speed? 
     
     return
 
