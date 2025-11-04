@@ -29,6 +29,7 @@ class LearningEnvironment():
         
         self.players_number = players_number
         self.n_players = players_number[0] + players_number[1]
+        self.previous_actions = [-1 for i in range(self.n_players)]
         
         self.scoring_function = scoring_function
         self.training_progression = training_progression
@@ -40,7 +41,6 @@ class LearningEnvironment():
         self._init_game()
         if(display):
             self._initDisplay(simulation_speed)
-            
             
     
     def reset(self):
@@ -65,6 +65,7 @@ class LearningEnvironment():
     
     def playerAct(self, player_id, action):
         player = self.players[player_id]
+        self.previous_actions[player_id] = action
         return play(player, self.ball, action)
         
     def getState(self, player_id):
@@ -73,7 +74,8 @@ class LearningEnvironment():
     
     def getReward(self, player_id):
         player = self.players[player_id]
-        return self.scoring_function(player, self.ball, self.left_goal_position, self.right_goal_position, self.score, self.training_progression)
+        action = self.previous_actions[player_id]
+        return self.scoring_function(player, action, self.ball, self.left_goal_position, self.right_goal_position, self.score, self.training_progression)
     
     def isDone(self):
         return self.done
@@ -82,14 +84,13 @@ class LearningEnvironment():
     
     def _init_game(self, score : np.array = None):
         self.score = np.zeros(2)
-        if(score != None):
+        if(score is not None):
             self.score = score
         space = createSpace()
         
         self.left_goal_position, self.right_goal_position = buildBoard(space) # Creates static objects
         self.ball = buildBall(space) # Creates the ball
         self.players, self.players_left, self.players_right, self.selected_player = buildPlayers(space, self.players_number, self.human) # Creates the players
-        
         self.space = space
         
     def _initDisplay(self, simulation_speed):

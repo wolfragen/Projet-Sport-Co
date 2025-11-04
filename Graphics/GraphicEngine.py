@@ -120,7 +120,7 @@ def draw_objects(space, players, draw_options: "pymunk.pygame_util.DrawOptions",
 
 def draw_score(score, screen: pygame.Surface) -> None:
     score_left, score_right = score
-    text = f"{score_left}   -   {score_right}"
+    text = f"{int(score_left)}   -   {int(score_right)}"
     text_color = Settings.SCORE_COLOR
 
     # Load font using PIL (Arial, size 36)

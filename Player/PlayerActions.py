@@ -47,6 +47,10 @@ def process_events() -> None:
     if keys[pygame.K_d]:
         return False,2
     
+    # Backward movement
+    if keys[pygame.K_s]:
+        return False,4
+    
     # Forward movement
     if keys[pygame.K_w]:
         return False,0

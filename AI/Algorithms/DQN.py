@@ -14,7 +14,7 @@ from collections import deque
 from AI.Network import DeepRLNetwork
 
 class DQNAgent:
-    def __init__(self, dimensions, batch_size, lr, buffer_size, epsilon_decay, linear_decay=True, 
+    def __init__(self, dimensions, batch_size, lr, sync_rate, buffer_size, epsilon_decay, linear_decay=True, 
                  epsilon=1.0, epsilon_min=0.05, gamma=0.99, betas=(0.9, 0.999), eps=1e-8,
                  random=False):
         self.batch_size = batch_size
@@ -27,10 +27,14 @@ class DQNAgent:
         self.linear_decay = linear_decay
         self.epsilon_min = epsilon_min
         
+        self.buffer_size = buffer_size
         self.memory = deque(maxlen=buffer_size)
         
         self.onlineNetwork = DeepRLNetwork(dimensions)
         self.targetNetwork = DeepRLNetwork(dimensions)
+        
+        self.sync_rate = sync_rate
+        self.sync_value = 0
         
         self.optimizer = optim.Adam(self.onlineNetwork.parameters(), lr=lr, betas=(0.9, 0.999), eps=1e-8)
         self.loss_function = torch.nn.MSELoss()
@@ -74,6 +78,11 @@ class DQNAgent:
         self.optimizer.zero_grad()
         self.loss.backward()
         self.optimizer.step()
+        
+        self.sync_value += 1
+        if(self.sync_value >= self.sync_rate):
+            self.sync_value = 0
+            self.syncTargetNetwork()
     
     def decayEpsilon(self):
         if(self.linear_decay):
@@ -94,12 +103,12 @@ class DQNAgent:
         self.random = False
 
 
-def getRandomDQNAgents(n, dimensions, batch_size=128, lr=3e-4, buffer_size=50_000, 
+def getRandomDQNAgents(n, dimensions, batch_size=128, lr=3e-4, sync_rate=1000, buffer_size=50_000, 
                        epsilon_decay=0.99995, linear_decay=True, epsilon=1.0, epsilon_min=0.05, gamma=0.99, 
                        betas=(0.9, 0.999), eps=1e-8):
     agents = []
     for i in range(n):
-        agents.append(DQNAgent(dimensions=dimensions, batch_size=batch_size, lr=lr, buffer_size=buffer_size, 
+        agents.append(DQNAgent(dimensions=dimensions, batch_size=batch_size, lr=lr, sync_rate=sync_rate, buffer_size=buffer_size, 
                                epsilon_decay=epsilon_decay, linear_decay=linear_decay, epsilon=epsilon, epsilon_min=epsilon_min, gamma=gamma, 
                                betas=betas, eps=eps, random=True))
     return agents

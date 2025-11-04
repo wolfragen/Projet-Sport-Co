@@ -29,7 +29,7 @@ def buildPlayers(space, players_number: list[int,int], human: bool = False):
         moment = pymunk.moment_for_box(mass, (size, size))
         body = pymunk.Body(mass, moment)
         body.position = pos
-        body.previous_posisiton = pos
+        body.previous_position = pos
         body.angle = angle
 
         shape = pymunk.Poly.create_box(body, (size, size))
