@@ -16,7 +16,7 @@ from AI.Network import DeepRLNetwork
 class DQNAgent:
     def __init__(self, dimensions, batch_size, lr, sync_rate, buffer_size, epsilon_decay, linear_decay=True, 
                  epsilon=1.0, epsilon_min=0.05, gamma=0.99, betas=(0.9, 0.999), eps=1e-8,
-                 random=False):
+                 random=False, cuda=False):
         self.batch_size = batch_size
         self.action_dim = dimensions[-1]
         
@@ -30,22 +30,29 @@ class DQNAgent:
         self.buffer_size = buffer_size
         self.memory = deque(maxlen=buffer_size)
         
-        self.onlineNetwork = DeepRLNetwork(dimensions)
-        self.targetNetwork = DeepRLNetwork(dimensions)
+        self.device = torch.device("cuda" if (cuda and torch.cuda.is_available()) else "cpu")
+        self.cuda = self.device.type == "cuda"
+
+        self.onlineNetwork = DeepRLNetwork(dimensions).to(self.device)
+        self.targetNetwork = DeepRLNetwork(dimensions).to(self.device)
+        self.targetNetwork.eval()
         
         self.sync_rate = sync_rate
         self.sync_value = 0
         
-        self.optimizer = optim.Adam(self.onlineNetwork.parameters(), lr=lr, betas=(0.9, 0.999), eps=1e-8)
+        self.optimizer = optim.Adam(
+            self.onlineNetwork.parameters(), 
+            lr=lr, betas=betas, eps=eps)
         self.loss_function = torch.nn.MSELoss()
         
         self.random = random
-
+        
+    @torch.no_grad()
     def act(self, state, train=True):
         if self.random or (train and np.random.rand() <= self.epsilon):
             return np.random.choice(self.action_dim)
         
-        q_values = self.onlineNetwork(torch.tensor(state, dtype=torch.float32))
+        q_values = self.onlineNetwork(torch.tensor(state, dtype=torch.float32, device=self.device))
         return torch.argmax(q_values).item()
 
     def remember(self, state, action, reward, next_state, done):
@@ -60,11 +67,11 @@ class DQNAgent:
         observations, actions, rewards, next_observations, dones = zip(*batch)
         
         ## convert to torch tensors ##
-        observations = torch.tensor(np.array(observations), dtype=torch.float32)
-        actions = torch.tensor(actions, dtype=torch.int64).unsqueeze(1)
-        rewards = torch.tensor(rewards, dtype=torch.float32).unsqueeze(1)
-        next_observations = torch.tensor(np.array(next_observations), dtype=torch.float32)
-        dones = torch.tensor(dones, dtype=torch.float32).unsqueeze(1)
+        observations = torch.tensor(np.array(observations), dtype=torch.float32, device=self.device)
+        actions = torch.tensor(actions, dtype=torch.int64, device=self.device).unsqueeze(1)
+        rewards = torch.tensor(rewards, dtype=torch.float32, device=self.device).unsqueeze(1)
+        next_observations = torch.tensor(np.array(next_observations), dtype=torch.float32, device=self.device)
+        dones = torch.tensor(dones, dtype=torch.float32, device=self.device).unsqueeze(1)
         ##############################
         
         predicted_q = self.onlineNetwork(observations).gather(1, actions)
@@ -77,6 +84,7 @@ class DQNAgent:
         # Backpropagation
         self.optimizer.zero_grad()
         self.loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.onlineNetwork.parameters(), max_norm=1.0) # Gradient Clipping
         self.optimizer.step()
         
         self.sync_value += 1
@@ -97,20 +105,20 @@ class DQNAgent:
     def save(self, path):
         self.onlineNetwork.save(path)
         
-    def load(self, path, device="cpu"):
-        self.onlineNetwork.load(path, device)
+    def load(self, path):
+        self.onlineNetwork.load(path, device=self.device)
         self.syncTargetNetwork()
         self.random = False
 
 
 def getRandomDQNAgents(n, dimensions, batch_size=128, lr=3e-4, sync_rate=1000, buffer_size=50_000, 
                        epsilon_decay=0.99995, linear_decay=True, epsilon=1.0, epsilon_min=0.05, gamma=0.99, 
-                       betas=(0.9, 0.999), eps=1e-8):
+                       betas=(0.9, 0.999), eps=1e-8, cuda=False):
     agents = []
     for i in range(n):
         agents.append(DQNAgent(dimensions=dimensions, batch_size=batch_size, lr=lr, sync_rate=sync_rate, buffer_size=buffer_size, 
                                epsilon_decay=epsilon_decay, linear_decay=linear_decay, epsilon=epsilon, epsilon_min=epsilon_min, gamma=gamma, 
-                               betas=betas, eps=eps, random=True))
+                               betas=betas, eps=eps, random=True, cuda=cuda))
     return agents
 
 

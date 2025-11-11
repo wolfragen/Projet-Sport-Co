@@ -6,61 +6,47 @@ Created on Fri Oct 31 20:27:17 2025
 """
 
 import numpy as np
+import math
 
 import Settings
 from Engine.Actions import canShoot
 
 
 def computeReward(player, action, ball, left_goal_position, right_goal_position, score, training_progression=0.0):
-    
-    body, shape = player
-    """ #TODO: remettre
-    if(score[0] != 0 and score[1] != 0):
-        if shape.left_team and score[0] == 1:
-            return 1
-        elif (not shape.left_team) and score[1] == 1:
-            return 1
-        else:
-            return -1"""
-        
         
     body, shape = player
     ball_body, ball_shape = ball
     
-    offset = Settings.SCREEN_OFFSET
-    max_dist = Settings.MAX_DIST
+    demi_goal_len = math.floor(Settings.GOAL_LEN/2)
     
     delta_time = Settings.DELTA_TIME
     player_speed = Settings.PLAYER_SPEED
-    player_rotating_speed = Settings.PLAYER_ROT_SPEED
     shooting_speed = Settings.SHOOTING_SPEED
     
     reward = 0.0
-    
-    
-    if(action == 3 and not canShoot(body, ball_body)):
-        return -0.9 * (1 - training_progression) -0.1
         
-    alpha, beta = 1.0, 0.5  # relative weights
+    alpha, beta = 1.0, 1.0  # relative weights
     
-    static_reward = -0.1
+    static_reward = -0.005
     delta_ball_player_coeff = 0.05
-    dist_ball_player_coeff = 0.2 #0.002 * (1 - training_progression) # mettre au carré ?
-    delta_ball_goal_coeff = 0
-    dist_ball_goal_coeff = 0 # 0.02 * (1 - training_progression)
-    out_of_bound_coeff = 0
-    delta_angle_coeff = 0.05 * (1 - training_progression)
-    angle_diff_coeff = 0.2 * (1 - training_progression)
-    can_shoot_coeff = 1 #* np.sqrt(1 - training_progression)
-    stuck_coeff = 0.2 * (training_progression+1)**2
+    delta_ball_goal_coeff = 0.1
+    can_shoot_coeff = 0.01
+    goal_coeff = 5
+    
+    
+    body, shape = player
+    if(score[0] != 0 or score[1] != 0):
+        if shape.left_team and score[0] == 1:
+            return goal_coeff
+        elif (not shape.left_team) and score[1] == 1:
+            return goal_coeff
+        else:
+            return -goal_coeff
     
     # Delta position of player
     dx = (body.position[0] - body.previous_position[0])
     dy = (body.position[1] - body.previous_position[1])
     delta = np.sqrt(alpha * dx**2 + beta * dy**2)
-    
-    if(abs(delta) <  (player_speed * delta_time/1000)/100):
-        return - stuck_coeff
     
     # Distance to ball
     prev_dx = (ball_body.previous_position[0] - body.previous_position[0])
@@ -75,32 +61,153 @@ def computeReward(player, action, ball, left_goal_position, right_goal_position,
     delta_ball_player_reward = 0
     if(abs(delta) > (player_speed * delta_time/1000)/1000):
         delta_ball_player_reward = delta_ball_player_coeff* delta / (player_speed * delta_time/1000)
+        delta_ball_player_reward = max(-delta_ball_player_coeff, min(delta_ball_player_reward, delta_ball_player_coeff))
+    
+    
+    # Distance of ball to opponent goal
+    if shape.left_team:
+        gx, gy = right_goal_position
+        gy_top, gy_bottom = gy - demi_goal_len, gy + demi_goal_len
+    else:
+        gx, gy = left_goal_position
+        gy_top, gy_bottom = gy - demi_goal_len, gy + demi_goal_len
+    
+    prev_dist = point_to_segment_distance(
+        ball_body.previous_position[0], ball_body.previous_position[1],
+        gx, gy_top, gx, gy_bottom
+    )
+    curr_dist = point_to_segment_distance(
+        ball_body.position[0], ball_body.position[1],
+        gx, gy_top, gx, gy_bottom
+    )
+    
+    delta = prev_dist - curr_dist
+    delta_ball_goal_reward = 0
+    if abs(delta) > (shooting_speed * delta_time / 1000) / 1000:
+        delta_ball_goal_reward = delta_ball_goal_coeff * delta / (shooting_speed * delta_time / 1000) * 4
+        delta_ball_goal_reward = max(-delta_ball_goal_coeff, min(delta_ball_goal_reward, delta_ball_goal_coeff))
+        
+    can_shoot_reward = 0
+    if(canShoot(body, ball_body)):
+        can_shoot_reward = can_shoot_coeff
+    elif(action == 3):
+        can_shoot_reward = - can_shoot_coeff
+    
+    reward = (static_reward + delta_ball_goal_reward + delta_ball_player_reward + can_shoot_reward)
+
+    return reward
+
+def point_to_segment_distance(px, py, x1, y1, x2, y2):
+    """Returns shortest distance from point (px, py) to segment (x1, y1)-(x2, y2)."""
+    # Vector projection approach
+    vx, vy = x2 - x1, y2 - y1
+    wx, wy = px - x1, py - y1
+
+    c1 = wx * vx + wy * vy
+    if c1 <= 0:
+        return np.hypot(px - x1, py - y1)
+    c2 = vx * vx + vy * vy
+    if c2 <= c1:
+        return np.hypot(px - x2, py - y2)
+
+    b = c1 / c2
+    bx, by = x1 + b * vx, y1 + b * vy
+    return np.hypot(px - bx, py - by)
+
+
+
+def completeComputeReward(player, action, ball, left_goal_position, right_goal_position, score, training_progression=0.0):
+    
+    body, shape = player
+    if(score[0] != 0 or score[1] != 0):
+        if shape.left_team and score[0] == 1:
+            return 1
+        elif (not shape.left_team) and score[1] == 1:
+            return 1
+        else:
+            return -1
+        
+        
+    body, shape = player
+    ball_body, ball_shape = ball
+    
+    offset = Settings.SCREEN_OFFSET
+    max_dist = Settings.MAX_DIST
+    
+    demi_goal_len = math.floor(Settings.GOAL_LEN/2)
+    
+    delta_time = Settings.DELTA_TIME
+    player_speed = Settings.PLAYER_SPEED
+    player_rotating_speed = Settings.PLAYER_ROT_SPEED
+    shooting_speed = Settings.SHOOTING_SPEED
+    
+    reward = 0.0
+    
+    """
+    if(action == 3 and not canShoot(body, ball_body)):
+        return -0.5 * (1 - training_progression) -0.05"""
+        
+    alpha, beta = 1.0, 1.0  # relative weights
+    
+    static_reward = -0.001
+    delta_ball_player_coeff = 0.05
+    dist_ball_player_coeff = 0
+    delta_ball_goal_coeff = 0.1 + delta_ball_player_coeff # éliminer la récompense négative de l'éloignement de la balle % joueur
+    dist_ball_goal_coeff = 0
+    out_of_bound_coeff = 0
+    delta_angle_coeff = 0
+    angle_diff_coeff = 0
+    can_shoot_coeff = 0
+    
+    # Delta position of player
+    dx = (body.position[0] - body.previous_position[0])
+    dy = (body.position[1] - body.previous_position[1])
+    delta = np.sqrt(alpha * dx**2 + beta * dy**2)
+    
+    # Distance to ball
+    prev_dx = (ball_body.previous_position[0] - body.previous_position[0])
+    prev_dy = (ball_body.previous_position[1] - body.previous_position[1])
+    prev_dist = np.sqrt(alpha * prev_dx**2 + beta * prev_dy**2)
+    
+    curr_dx = (ball_body.position[0] - body.position[0])
+    curr_dy = (ball_body.position[1] - body.position[1])
+    curr_dist = np.sqrt(alpha * curr_dx**2 + beta * curr_dy**2)
+    
+    delta = prev_dist - curr_dist
+    delta_ball_player_reward = 0
+    if(abs(delta) > (player_speed * delta_time/1000)/1000):
+        delta_ball_player_reward = delta_ball_player_coeff* delta / (player_speed * delta_time/1000)
+        delta_ball_player_reward = max(-delta_ball_player_coeff, min(delta_ball_player_reward, delta_ball_player_coeff))
+        print(f"{delta=}")
+        print(f"{delta_ball_player_reward=}")
         
     dist_ball_player_reward = -dist_ball_player_coeff* curr_dist/max_dist
     
     
     # Distance of ball to opponent goal
     if shape.left_team:
-        prev_dx = (right_goal_position[0] - ball_body.previous_position[0])
-        prev_dy = (right_goal_position[1] - ball_body.previous_position[1])
-        prev_dist = np.sqrt(alpha * prev_dx**2 + beta * prev_dy**2)
-        
-        curr_dx = (right_goal_position[0] - ball_body.previous_position[0])
-        curr_dy = (right_goal_position[1] - ball_body.previous_position[1])
-        curr_dist = np.sqrt(alpha * curr_dx**2 + beta * curr_dy**2)
+        gx, gy = right_goal_position
+        gy_top, gy_bottom = gy - demi_goal_len, gy + demi_goal_len
     else:
-        prev_dx = (left_goal_position[0] - ball_body.previous_position[0])
-        prev_dy = (left_goal_position[1] - ball_body.previous_position[1])
-        prev_dist = np.sqrt(alpha * prev_dx**2 + beta * prev_dy**2)
-        
-        curr_dx = (left_goal_position[0] - ball_body.previous_position[0])
-        curr_dy = (left_goal_position[1] - ball_body.previous_position[1])
-        curr_dist = np.sqrt(alpha * curr_dx**2 + beta * curr_dy**2)
+        gx, gy = left_goal_position
+        gy_top, gy_bottom = gy - demi_goal_len, gy + demi_goal_len
+    
+    prev_dist = point_to_segment_distance(
+        ball_body.previous_position[0], ball_body.previous_position[1],
+        gx, gy_top, gx, gy_bottom
+    )
+    curr_dist = point_to_segment_distance(
+        ball_body.position[0], ball_body.position[1],
+        gx, gy_top, gx, gy_bottom
+    )
     
     delta = prev_dist - curr_dist
     delta_ball_goal_reward = 0
-    if(abs(delta) > (shooting_speed * delta_time/1000)/1000):
-        delta_ball_goal_reward = delta_ball_goal_coeff* delta / (shooting_speed * delta_time/1000)
+    if abs(delta) > (shooting_speed * delta_time / 1000) / 1000:
+        delta_ball_goal_reward = delta_ball_goal_coeff * delta / (shooting_speed * delta_time / 1000) * 4
+        delta_ball_goal_reward = max(-delta_ball_goal_coeff, min(delta_ball_goal_reward, delta_ball_goal_coeff))
+        print(f"{delta=}")
+        print(f"{delta_ball_goal_reward=}")
         
     dist_ball_goal_reward = -dist_ball_goal_coeff* curr_dist/max_dist
         
@@ -134,7 +241,6 @@ def computeReward(player, action, ball, left_goal_position, right_goal_position,
     can_shoot_reward = 0
     if(canShoot(body, ball_body)):
         can_shoot_reward = can_shoot_coeff
-        return 1 #TODO à enlever
     
     reward = (static_reward + out_of_bound_reward + delta_angle_reward 
             + angle_diff_reward + dist_ball_player_reward + delta_ball_goal_reward 

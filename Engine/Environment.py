@@ -16,7 +16,7 @@ from Engine.Entity.Board import buildBoard
 from Engine.Entity.Ball import buildBall
 from Engine.Entity.Player import buildPlayers
 from Engine.Vision import getVision
-from Engine.Actions import reset_movements
+from Engine.Actions import reset_movements, define_previous_pos
 from AI.AIActions import play
 from Player.PlayerActions import process_events
 
@@ -46,7 +46,9 @@ class LearningEnvironment():
     def reset(self):
         self._initGame()
         
-    def step(self):
+    def step(self, human_events = True):
+        
+        define_previous_pos(self.players, self.ball)
         
         space = self.space
         for _ in range(Settings.DELTA_TIME):
@@ -57,7 +59,8 @@ class LearningEnvironment():
         
         if self.display:
             self._tickDisplay()
-            self._processHumanEvents()
+            if(human_events):
+                self._processHumanEvents()
         
         rewards = [self.getReward(player_id) for player_id in range(self.n_players)]
         checkPlayersOut(self.players) # check for players out of bound
@@ -92,6 +95,7 @@ class LearningEnvironment():
         self.ball = buildBall(space) # Creates the ball
         self.players, self.players_left, self.players_right, self.selected_player = buildPlayers(space, self.players_number, self.human) # Creates the players
         self.space = space
+        define_previous_pos(self.players, self.ball)
         
     def _initDisplay(self, simulation_speed):
         if(self.screen == None or self.draw_options == None):
@@ -131,9 +135,12 @@ class LearningEnvironment():
     def _processHumanEvents(self):
         should_stop, action = process_events()
         if(should_stop):
-            return self._endDisplay()
+            self._endDisplay()
+            return True, -1
         if(action != -1 and self.selected_player != None):
-            return self.playerAct(self.selected_player, action)
+            self.playerAct(self.selected_player, action)
+            return True, action
+        return False, -1
     
     
     

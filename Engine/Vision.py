@@ -15,12 +15,12 @@ Pour les types en rayTracing :
     - 6: joueur droit
 
 autres paramètres de vision : 
-    - orientation
+    - orientation cos, sin
     - position de la balle % joueur
     - position du goal gauche % joueur
     - position du goal droit % joueur
     
-Total de 519 entrées.
+Total de 520 entrées.
 
 """
 
@@ -136,16 +136,17 @@ def getVision(space, player: tuple[pymunk.Body, pymunk.Shape], ball, left_goal_p
     # Normalize positions by the field dimensions
     dim_x = Settings.DIM_X
     dim_y = Settings.DIM_Y
-    vision_array[0] = body.angle / (2*np.pi)
-    vision_array[1:3] = (ball_body.position[0] - body.position[0]) / dim_x, (ball_body.position[1] - body.position[1]) / dim_y
-    vision_array[3:5] = (left_goal_position[0] - body.position[0]) / dim_x, (left_goal_position[1] - body.position[1]) / dim_y
-    vision_array[5:7] = (right_goal_position[0] - body.position[0]) / dim_x, (right_goal_position[1] - body.position[1]) / dim_y
+    vision_array[0] = math.sin(body.angle)
+    vision_array[1] = math.cos(body.angle)
+    vision_array[2:4] = (ball_body.position[0] - body.position[0]) / dim_x, (ball_body.position[1] - body.position[1]) / dim_y
+    vision_array[4:6] = (left_goal_position[0] - body.position[0]) / dim_x, (left_goal_position[1] - body.position[1]) / dim_y
+    vision_array[6:8] = (right_goal_position[0] - body.position[0]) / dim_x, (right_goal_position[1] - body.position[1]) / dim_y
 
     # Normalize ray distances and copy one-hot info
     ray_data = rayTracing(space, player)
     ray_data[::8] = ray_data[::8] / dim_x
     ray_data[1::8] = ray_data[1::8] / dim_y
-    vision_array[7:] = ray_data.flatten()
+    vision_array[8:] = ray_data.flatten()
 
     return vision_array
 

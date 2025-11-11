@@ -12,9 +12,11 @@ import time
 from collections import deque
 import numpy as np
 
+import Settings
 from Graphics.GraphicEngine import startDisplay
 from Engine.Environment import LearningEnvironment
 from AI.Rewards.Reward import computeReward
+from Player.PlayerActions import process_events
 
 
 def humanGame(players_number, agents):
@@ -42,14 +44,14 @@ def humanGame(players_number, agents):
     return
 
 
-def debugGame(players_number, agents, max_steps=1000):
+def debugGame(players_number, agents, max_steps=1000, human = False):
     n_players = players_number[0] + players_number[1]
     assert len(agents) == n_players
     
     screen, draw_options = startDisplay()
     env = LearningEnvironment(players_number=players_number, scoring_function=computeReward,
                               display=True, screen=screen, draw_options=draw_options, 
-                              human=False)
+                              human=human)
     step = 1
     
     states = [None for _ in range(n_players)]
@@ -58,26 +60,36 @@ def debugGame(players_number, agents, max_steps=1000):
     
     while(not env.isDone() and env.display and step<max_steps+1):
         
+        human_player = env.selected_player
         for player_id in range(n_players):
             agent = agents[player_id]
             state = env.getState(player_id)
-            action = agent.act(state, train=False)
-            env.playerAct(player_id, action)
+            action = None
+            
+            if(player_id != human_player):
+                action = agent.act(state, train=False)
+                env.playerAct(player_id, action)
+            else:
+                temp_continue = False
+                while(not temp_continue):
+                    temp_continue, action = env._processHumanEvents()
+                
                 
             states[player_id] = state
             actions[player_id] = action
-        
-        temp_continue = False
-        while not temp_continue:
-            event = pygame.event.wait()
-            keys = pygame.key.get_pressed()
             
-            if event.type == pygame.QUIT:
-                env._endDisplay()
-                return
-            
-            elif keys[pygame.K_SPACE]:
-                temp_continue = True
+        if(not human):
+            temp_continue = False
+            while not temp_continue:
+                event = pygame.event.wait()
+                keys = pygame.key.get_pressed()
+                
+                if event.type == pygame.QUIT:
+                    env._endDisplay()
+                    return
+                
+                elif keys[pygame.K_SPACE]:
+                    temp_continue = True
         
         rewards = env.step()
         
@@ -145,10 +157,6 @@ def trainingGame(players_number, agents, scoring_function, max_steps, training_p
             action = actions[player_id]
             reward = rewards[player_id]
             
-            if(reward >= 1):
-                env.done = True
-                done = True # TODO: temporaire !! à enlever
-            
             if(train):
                 agent.remember(state, action, reward, next_state, done)
                 if(not gather_data): # on entraine pas sur les données de départ.
@@ -184,7 +192,7 @@ def train(players_number, agents, num_episodes, scoring_function, save_folder, w
     
     print("Starting to gather data")
     
-    while(len(agents[0].memory) < agents[0].buffer_size*0.5):
+    while(len(agents[0].memory) < agents[0].batch_size*50):
         result = trainingGame(players_number=players_number, agents=agents, max_steps=max_steps, training_progression=0, scoring_function=scoring_function, 
                               display=display, simulation_speed=simulation_speed, screen=screen, draw_options=draw_options, gather_data=True)
         score = result.score
@@ -218,7 +226,7 @@ def train(players_number, agents, num_episodes, scoring_function, save_folder, w
             for agent in agents:
                 agent.decayEpsilon()
         
-        if((episode+1) % 10 == 0):
+        if((episode+1) % 100 == 0):
             # Progress Bar
             bar_length = 40
             progress = (episode + 1) / num_episodes
@@ -229,6 +237,8 @@ def train(players_number, agents, num_episodes, scoring_function, save_folder, w
             speed = (episode+1)/elapsed
             
             print(f"Episode {episode+1} | Reward: {np.mean(moyenne_reward):.2f} | Steps: {np.mean(moyenne_step):.1f} | epsilon={agents[0].epsilon:.2f} | Score: {np.mean(moyenne_score_left):.2f} - {np.mean(moyenne_score_right):.2f} | Win: {np.mean(moyenne_done):.2f} | {speed:.1f} eps/s | {bar} | {progress*100:6.2f}%")
+            if(agents[0].epsilon == agents[0].epsilon_min):
+                runTests(players_number, agents, scoring_function, max_steps, nb_tests=100, should_print=False)
     
     if(save_folder != None):
         for agent_id in range(len(agents)):
@@ -266,7 +276,7 @@ def testingGame(players_number, agents, scoring_function, max_steps, training_pr
         for player_id in range(n_players):
             agent = agents[player_id]
             state = states[player_id]
-            action = agent.act(state, train=train)
+            action = agent.act(state, train=False)
             env.playerAct(player_id, action)
                 
             states[player_id] = state
@@ -281,17 +291,13 @@ def testingGame(players_number, agents, scoring_function, max_steps, training_pr
             action = actions[player_id][step-1]
             reward = rewards[player_id]
             
-            if(reward >= 1):
-                env.done = True
-                done = True # TODO: temporaire !! à enlever
-            
             states[player_id] = next_state
             total_reward += reward
             
         step += 1
     return EpisodeResult(total_reward=total_reward, actions=actions, steps=step-1, score=env.score, success=env.isDone(), display=env.display)
 
-def runTests(players_number, agents, scoring_function, max_steps, training_progression=1.0, nb_tests=10_000):
+def runTests(players_number, agents, scoring_function, max_steps, training_progression=1.0, nb_tests=10_000, should_print=True):
     
     rewards = 0
     steps = 0
@@ -311,7 +317,7 @@ def runTests(players_number, agents, scoring_function, max_steps, training_progr
         if(not result.success):
             nb_fail += 1
         
-        if((episode+1)%(nb_tests/10) == 0):
+        if((episode+1)%(nb_tests/10) == 0 and should_print):
             print(f"Tests en cours: {(episode+1)/nb_tests*100}%")
     
     print(f"{nb_tests} tests | Reward: {rewards/nb_tests:.2f} | Steps: {steps/nb_tests:.1f} | Score: {score_left/nb_tests:.2f} / {score_right/nb_tests:.2f} | failed: {nb_fail/nb_tests:.2f}")
