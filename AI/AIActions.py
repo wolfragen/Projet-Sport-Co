@@ -51,7 +51,7 @@ def play(player, ball, action) -> np.array:
         
     if action == 4:
         # Move backward
-        Actions.move(player, speed=-speed) # TODO variable speed? 
+        Actions.move(player, speed=-speed) # TODO variable speed?
     
     return
 

@@ -53,10 +53,10 @@ if(__name__ == "__main__"):
     
     
     agents[0].random = False
-    #agents[0].load("C:/.Ingé/Projet-Sport-Co-Networks/Suivi_test_step=27.3_fail=0.28")
-    #debugGame(players_number, agents, human=True)
+    agents[0].load("C:/.Ingé/Projet-Sport-Co-Networks/score=0.23")
+    debugGame(players_number, agents, human=False)
     
-
+"""
     save_folder = "C:/.ingé/Projet-Sport-Co-Networks/"
     
     train(players_number, agents, num_episodes, scoring_function, save_folder, 
@@ -71,7 +71,7 @@ if(__name__ == "__main__"):
     
     #runTests(players_number=players_number, agents=agents, scoring_function=scoring_function, max_steps=ending_max_steps, nb_tests=10_000)
 
-
+"""
 
 
 
