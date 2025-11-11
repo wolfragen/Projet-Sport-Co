@@ -6,6 +6,7 @@ Created on Sat Oct 11 16:10:14 2025
 """
 
 import math
+import torch
 
 import Settings
 from Play import humanGame, debugGame, trainingGame, train, runTests
@@ -16,23 +17,23 @@ if(__name__ == "__main__"):
     
     players_number = (1,0)
     
-    dimensions = (Settings.ENTRY_NEURONS, 256, 128, 128, 5)
+    dimensions = (Settings.ENTRY_NEURONS, 128, 128, 5)
     sync_rate = 1000
     batch_size = 128
-    lr = 1e-4
-    gamma = 0.995
+    lr = 5e-5
+    gamma = 0.99
     buffer_size = 100_000
     
     epsilon = 1.0
-    epsilon_min = 0.1
+    epsilon_min = 0.05
     
     num_episodes = 20000
-    wait_rate = 0.05
-    exploration_rate = 0.8 - wait_rate # à 80%, on atteint le min d'epsilon, en incluant le temps "stagnant"
+    wait_rate = 0
+    exploration_rate = 0.5 - wait_rate # à x%, on atteint le min d'epsilon, en incluant le temps "stagnant"
     num_wait = round(num_episodes*wait_rate) # number of episodes to wait until epsilon decay
     
-    starting_max_steps = 40
-    ending_max_steps = 40
+    starting_max_steps = 750
+    ending_max_steps = 750
     
     display = False
     simulation_speed = 10.0
@@ -43,14 +44,17 @@ if(__name__ == "__main__"):
     
     scoring_function = computeReward
     
+    cuda = torch.cuda.is_available()
+    
     n_players = players_number[0] + players_number[1]
     agents = getRandomDQNAgents(n=n_players, dimensions=dimensions, batch_size=batch_size, lr=lr, sync_rate=sync_rate, buffer_size=buffer_size, 
-                           epsilon_decay=epsilon_decay, linear_decay=True, epsilon=epsilon, epsilon_min=epsilon_min, gamma=gamma)
+                           epsilon_decay=epsilon_decay, linear_decay=True, epsilon=epsilon, epsilon_min=epsilon_min, gamma=gamma, cuda=cuda)
     
     
     
     agents[0].random = False
     #agents[0].load("C:/.Ingé/Projet-Sport-Co-Networks/Suivi_test_step=27.3_fail=0.28")
+    #debugGame(players_number, agents, human=True)
     
 
     save_folder = "C:/.ingé/Projet-Sport-Co-Networks/"

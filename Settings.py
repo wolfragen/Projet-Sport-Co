@@ -53,7 +53,7 @@ PLAYER_ROT_SPEED = np.pi*0.75 # rad/s
 NUMBER_OF_RAYS = 0
 RAY_ANGLE = 2*np.pi # rad, total angle to cover with rayTracing
 VISION_RANGE = MAX_DIST # Limits the range of rays for rayTracing. "inf" by default here.
-ENTRY_NEURONS = NUMBER_OF_RAYS*8 + 7
+ENTRY_NEURONS = NUMBER_OF_RAYS*8 + 8
 
 
 
