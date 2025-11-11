@@ -66,7 +66,7 @@ def debugGame(players_number, agents, max_steps=1000, human = False):
             state = env.getState(player_id)
             action = None
             
-            if(player_id != human_player):
+            if(player_id != human_player or not human):
                 action = agent.act(state, train=False)
                 env.playerAct(player_id, action)
             else:
