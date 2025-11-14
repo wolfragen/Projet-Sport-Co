@@ -13,6 +13,7 @@ from Play import humanGame, debugGame, trainingGame, train, runTests
 from AI.Algorithms.DQN import getRandomDQNAgents
 from AI.Rewards.Reward import computeReward
 
+# Test Steven
 if(__name__ == "__main__"):
     
     players_number = (1,0)
