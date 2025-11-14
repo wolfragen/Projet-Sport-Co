@@ -1,9 +1,16 @@
 https://github.com/LARG/HFO/blob/master/src/highlevel_feature_extractor.cpp
 
+// Feature[0]: X-postion
 addNormFeature(self_pos.x, -tolerance_x, SP.pitchHalfLength() + tolerance_x);
+
+// Feature[1]: Y-Position
 addNormFeature(self_pos.y, -SP.pitchHalfWidth() - tolerance_y,
                  SP.pitchHalfWidth() + tolerance_y);
+
+// Feature[2]: Self Angle
 addNormFeature(self_ang, -M_PI, M_PI);
+
+// Feature[3] and [4]: (x,y) postition of the ball
 addNormFeature(ball_pos.x, -tolerance_x, SP.pitchHalfLength() + tolerance_x);
 addNormFeature(ball_pos.y, -SP.pitchHalfWidth() - tolerance_y, SP.pitchHalfWidth() + tolerance_y);
 
@@ -18,3 +25,9 @@ addNormFeature(ball_pos.y, -SP.pitchHalfWidth() - tolerance_y, SP.pitchHalfWidth
 
 // Feature[8]: largest open goal angle
   addNormFeature(calcLargestGoalAngle(wm, self_pos), 0, M_PI);
+
+// Feature[9]: Dist to our closest opp
+// Features[9 - 9+T]: teammate's open angle to goal
+// Features[9+T - 9+2T]: teammates' dists to closest opps
+// Features [9+3T - 9+6T]: x, y, unum of teammates
+// Features [9+6T - 9+6T+3O]: x, y, unum of opponents
