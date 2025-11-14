@@ -1,0 +1,20 @@
+https://github.com/LARG/HFO/blob/master/src/highlevel_feature_extractor.cpp
+
+addNormFeature(self_pos.x, -tolerance_x, SP.pitchHalfLength() + tolerance_x);
+addNormFeature(self_pos.y, -SP.pitchHalfWidth() - tolerance_y,
+                 SP.pitchHalfWidth() + tolerance_y);
+addNormFeature(self_ang, -M_PI, M_PI);
+addNormFeature(ball_pos.x, -tolerance_x, SP.pitchHalfLength() + tolerance_x);
+addNormFeature(ball_pos.y, -SP.pitchHalfWidth() - tolerance_y, SP.pitchHalfWidth() + tolerance_y);
+
+// Feature[5]: Able to kick
+  addNormFeature(self.isKickable(), false, true);
+
+// Feature[6]: Goal Center Distance
+  addNormFeature(r, 0, maxR);
+
+// Feature[7]: Angle to goal center
+  addNormFeature(th, -M_PI, M_PI);
+
+// Feature[8]: largest open goal angle
+  addNormFeature(calcLargestGoalAngle(wm, self_pos), 0, M_PI);
