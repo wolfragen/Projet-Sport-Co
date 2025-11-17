@@ -11,6 +11,7 @@ import math
 import time
 from collections import deque
 import numpy as np
+import pandas as pd
 
 import Settings
 from Graphics.GraphicEngine import startDisplay
@@ -190,6 +191,18 @@ def train(players_number, agents, num_episodes, scoring_function, save_folder, w
     moyenne_score_right = deque(maxlen=nb_moyenne)
     moyenne_done = deque(maxlen=nb_moyenne)
     
+    reward_history = []
+    step_history = []
+    score_left_history = []
+    score_right_history = []
+    done_history = []
+    epsilon_history = []
+    
+    min_fail_percent = 1.0
+    fail_percent_history = []
+    reward_history_test = []
+    step_history_test = []
+    
     print("Starting to gather data")
     
     while(len(agents[0].memory) < agents[0].batch_size*50):
@@ -236,13 +249,58 @@ def train(players_number, agents, num_episodes, scoring_function, save_folder, w
             elapsed = time.time() - start
             speed = (episode+1)/elapsed
             
-            print(f"Episode {episode+1} | Reward: {np.mean(moyenne_reward):.2f} | Steps: {np.mean(moyenne_step):.1f} | epsilon={agents[0].epsilon:.2f} | Score: {np.mean(moyenne_score_left):.2f} - {np.mean(moyenne_score_right):.2f} | Win: {np.mean(moyenne_done):.2f} | {speed:.1f} eps/s | {bar} | {progress*100:6.2f}%")
+            reward_mean = np.mean(moyenne_reward)
+            step_mean = np.mean(moyenne_step)
+            epsilon = agents[0].epsilon
+            score_left_mean = np.mean(moyenne_score_left)
+            score_right_mean = np.mean(moyenne_score_right)
+            done_mean = np.mean(moyenne_done)
+            
+            reward_history.append(reward_mean)
+            step_history.append(step_mean)
+            epsilon_history.append(epsilon)
+            score_left_history.append(score_left_mean)
+            score_right_history.append(score_right_mean)
+            done_history.append(done_mean)
+            
+            print(f"Episode {episode+1} | Reward: {reward_mean:.2f} | Steps: {step_mean:.1f} | epsilon={epsilon:.2f} | Score: {score_left_mean:.2f} - {score_right_mean:.2f} | Win: {done_mean:.2f} | {speed:.1f} eps/s | {bar} | {progress*100:6.2f}%")
             if(agents[0].epsilon == agents[0].epsilon_min):
-                runTests(players_number, agents, scoring_function, max_steps, nb_tests=100, should_print=False)
+                r, s, s_left, s_right, fail_percent = runTests(players_number, agents, scoring_function, max_steps, nb_tests=100, should_print=False)
+                fail_percent_history.append(fail_percent)
+                reward_history_test.append(r)
+                step_history_test.append(s)
+                
+                if(fail_percent < min_fail_percent and min_fail_percent-fail_percent >= 0.01):
+                    # Enlever la partie aléatoire : on regarde sur 1000 tests si on a eu un bon résultat.
+                    
+                    r, s, s_left, s_right, fail_percent = runTests(players_number, agents, scoring_function, max_steps, nb_tests=1000, should_print=False)
+                    if(fail_percent < min_fail_percent and min_fail_percent-fail_percent >= 0.01):
+                        min_fail_percent = fail_percent
+                        for agent_id in range(len(agents)):
+                            agent.onlineNetwork.save(save_folder + f"{agent_id}_best")
+                        
+            else:
+                fail_percent_history.append(None)
+                reward_history_test.append(None)
+                step_history_test.append(None)
     
     if(save_folder != None):
         for agent_id in range(len(agents)):
             agent.onlineNetwork.save(save_folder + f"{agent_id}")
+            agent.load(save_folder + f"{agent_id}_best")
+            
+        df = pd.DataFrame({
+            "reward": reward_history,
+            "steps": step_history,
+            "epsilon": epsilon_history,
+            "score_left": score_left_history,
+            "score_right": score_right_history,
+            "done": done_history,
+            "fail_percent": fail_percent_history,
+            "reward_test": reward_history_test,
+            "step_test": step_history_test,
+        })
+        df.to_csv(save_folder + "training_data.csv", index=False)
             
     print()
     print("="*100)
@@ -253,7 +311,7 @@ def train(players_number, agents, num_episodes, scoring_function, save_folder, w
     print()
     
     runTests(players_number=players_number, agents=agents, scoring_function=scoring_function, max_steps=max_steps)
-    return
+    return reward_history, step_history, epsilon_history, score_left_history, score_right_history, done_history, fail_percent_history, reward_history_test, step_history_test
 
 
 
@@ -321,7 +379,7 @@ def runTests(players_number, agents, scoring_function, max_steps, training_progr
             print(f"Tests en cours: {(episode+1)/nb_tests*100}%")
     
     print(f"{nb_tests} tests | Reward: {rewards/nb_tests:.2f} | Steps: {steps/nb_tests:.1f} | Score: {score_left/nb_tests:.2f} / {score_right/nb_tests:.2f} | failed: {nb_fail/nb_tests:.2f}")
-    return
+    return rewards/nb_tests, steps/nb_tests, score_left/nb_tests, score_right/nb_tests, nb_fail/nb_tests
 
 
 

@@ -30,7 +30,7 @@ def computeReward(player, action, ball, left_goal_position, right_goal_position,
     static_reward = -0.005
     delta_ball_player_coeff = 0.05
     delta_ball_goal_coeff = 0.1
-    can_shoot_coeff = 0.01
+    can_shoot_coeff = 0
     goal_coeff = 5
     
     
