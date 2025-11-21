@@ -13,11 +13,8 @@ from collections import deque
 import numpy as np
 import pandas as pd
 
-import Settings
 from Graphics.GraphicEngine import startDisplay
 from Engine.Environment import LearningEnvironment
-from AI.Rewards.Reward import computeReward
-from Player.PlayerActions import process_events
 
 
 def humanGame(players_number, agents):
@@ -25,8 +22,7 @@ def humanGame(players_number, agents):
     assert len(agents) == n_players
     
     screen, draw_options = startDisplay()
-    env = LearningEnvironment(players_number=players_number, scoring_function=computeReward,
-                              display=True, screen=screen, draw_options=draw_options, 
+    env = LearningEnvironment(players_number=players_number, agents=agents, display=True, screen=screen, draw_options=draw_options, 
                               human=True)
     
     while(not env.isDone() and env.display):
@@ -50,8 +46,7 @@ def debugGame(players_number, agents, max_steps=1000, human = False):
     assert len(agents) == n_players
     
     screen, draw_options = startDisplay()
-    env = LearningEnvironment(players_number=players_number, scoring_function=computeReward,
-                              display=True, screen=screen, draw_options=draw_options, 
+    env = LearningEnvironment(players_number=players_number, agents=agents, display=True, screen=screen, draw_options=draw_options, 
                               human=human)
     step = 1
     
@@ -123,11 +118,11 @@ class EpisodeResult:
     success: bool
     display: bool
 
-def trainingGame(players_number, agents, scoring_function, max_steps, training_progression, train=True, 
+def trainingGame(players_number, agents, max_steps, training_progression, train=True, 
                  display=False, simulation_speed=1.0, screen=None, draw_options=None, gather_data=False):
     n_players = players_number[0] + players_number[1]
     
-    env = LearningEnvironment(players_number=players_number, scoring_function=scoring_function, training_progression=training_progression,
+    env = LearningEnvironment(players_number=players_number, agents=agents, training_progression=training_progression,
                               display=display, simulation_speed=simulation_speed, screen=screen, draw_options=draw_options,
                               human=False)
     step = 1
@@ -169,8 +164,8 @@ def trainingGame(players_number, agents, scoring_function, max_steps, training_p
         step += 1
     return EpisodeResult(total_reward=total_reward, actions=None, steps=step-1, score=env.score, success=env.isDone(), display=env.display)
 
-def train(players_number, agents, num_episodes, scoring_function, save_folder, wait_rate=0.1, exploration_rate=0.8, 
-          starting_max_steps=100, ending_max_steps=1000, display=False, simulation_speed=1.0, moyenne_ratio=0.1):
+def train(players_number, agents, num_episodes, save_folder, wait_rate=0.1, exploration_rate=0.8, 
+          starting_max_steps=100, ending_max_steps=1000, display=False, simulation_speed=1.0, moyenne_ratio=0.1, end_test=True):
     assert len(agents) == players_number[0] + players_number[1]
     if(save_folder != None and save_folder[-1] != "/"):
         save_folder += "/"
@@ -206,7 +201,7 @@ def train(players_number, agents, num_episodes, scoring_function, save_folder, w
     print("Starting to gather data")
     
     while(len(agents[0].memory) < agents[0].batch_size*50):
-        result = trainingGame(players_number=players_number, agents=agents, max_steps=max_steps, training_progression=0, scoring_function=scoring_function, 
+        result = trainingGame(players_number=players_number, agents=agents, max_steps=max_steps, training_progression=0, 
                               display=display, simulation_speed=simulation_speed, screen=screen, draw_options=draw_options, gather_data=True)
         score = result.score
         display = result.display
@@ -222,7 +217,8 @@ def train(players_number, agents, num_episodes, scoring_function, save_folder, w
     
     for episode in range(num_episodes):
         
-        result = trainingGame(players_number=players_number, agents=agents, max_steps=max_steps, training_progression=min(1,(episode+1)/(num_episodes*exploration_rate)), scoring_function=scoring_function, 
+        result = trainingGame(players_number=players_number, agents=agents, max_steps=max_steps, 
+                              training_progression=min(1,(episode+1)/(num_episodes*exploration_rate)), 
                               display=display, simulation_speed=simulation_speed, screen=screen, draw_options=draw_options, gather_data=False)
         
         score = result.score
@@ -265,7 +261,7 @@ def train(players_number, agents, num_episodes, scoring_function, save_folder, w
             
             print(f"Episode {episode+1} | Reward: {reward_mean:.2f} | Steps: {step_mean:.1f} | epsilon={epsilon:.2f} | Score: {score_left_mean:.2f} - {score_right_mean:.2f} | Win: {done_mean:.2f} | {speed:.1f} eps/s | {bar} | {progress*100:6.2f}%")
             if(agents[0].epsilon == agents[0].epsilon_min):
-                r, s, s_left, s_right, fail_percent = runTests(players_number, agents, scoring_function, max_steps, nb_tests=100, should_print=False)
+                r, s, s_left, s_right, fail_percent = runTests(players_number, agents, max_steps, nb_tests=100, should_print=False)
                 fail_percent_history.append(fail_percent)
                 reward_history_test.append(r)
                 step_history_test.append(s)
@@ -273,7 +269,7 @@ def train(players_number, agents, num_episodes, scoring_function, save_folder, w
                 if(fail_percent < min_fail_percent and min_fail_percent-fail_percent >= 0.01):
                     # Enlever la partie aléatoire : on regarde sur 1000 tests si on a eu un bon résultat.
                     
-                    r, s, s_left, s_right, fail_percent = runTests(players_number, agents, scoring_function, max_steps, nb_tests=1000, should_print=False)
+                    r, s, s_left, s_right, fail_percent = runTests(players_number, agents, max_steps, nb_tests=1000, should_print=False)
                     if(fail_percent < min_fail_percent and min_fail_percent-fail_percent >= 0.01):
                         min_fail_percent = fail_percent
                         for agent_id in range(len(agents)):
@@ -301,25 +297,27 @@ def train(players_number, agents, num_episodes, scoring_function, save_folder, w
             "step_test": step_history_test,
         })
         df.to_csv(save_folder + "training_data.csv", index=False)
-            
-    print()
-    print("="*100)
-    print()
-    print(" "*45 + "Testing..." + " "*45)
-    print()
-    print("="*100)
-    print()
     
-    runTests(players_number=players_number, agents=agents, scoring_function=scoring_function, max_steps=max_steps)
+    if(end_test):
+        print()
+        print("="*100)
+        print()
+        print(" "*45 + "Testing..." + " "*45)
+        print()
+        print("="*100)
+        print()
+        
+        runTests(players_number=players_number, agents=agents, max_steps=max_steps)
+    
     return reward_history, step_history, epsilon_history, score_left_history, score_right_history, done_history, fail_percent_history, reward_history_test, step_history_test
 
 
 
 
-def testingGame(players_number, agents, scoring_function, max_steps, training_progression):
+def testingGame(players_number, agents, max_steps, training_progression):
     n_players = players_number[0] + players_number[1]
     
-    env = LearningEnvironment(players_number=players_number, scoring_function=scoring_function, training_progression=training_progression,
+    env = LearningEnvironment(players_number=players_number, agents=agents, training_progression=training_progression,
                               display=False, human=False)
     step = 1
     
@@ -355,7 +353,7 @@ def testingGame(players_number, agents, scoring_function, max_steps, training_pr
         step += 1
     return EpisodeResult(total_reward=total_reward, actions=actions, steps=step-1, score=env.score, success=env.isDone(), display=env.display)
 
-def runTests(players_number, agents, scoring_function, max_steps, training_progression=1.0, nb_tests=10_000, should_print=True):
+def runTests(players_number, agents, max_steps, training_progression=1.0, nb_tests=10_000, should_print=True):
     
     rewards = 0
     steps = 0
@@ -365,7 +363,7 @@ def runTests(players_number, agents, scoring_function, max_steps, training_progr
     
     for episode in range(nb_tests):
         
-        result = testingGame(players_number=players_number, agents=agents, scoring_function=scoring_function, max_steps=max_steps, training_progression=training_progression)
+        result = testingGame(players_number=players_number, agents=agents, max_steps=max_steps, training_progression=training_progression)
         rewards += result.total_reward
         steps += result.steps
         score = result.score

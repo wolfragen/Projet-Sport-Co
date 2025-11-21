@@ -7,14 +7,13 @@ Created on Sat Oct 11 16:10:14 2025
 
 import math
 import pandas as pd
-import os
 
 import Settings
 from Play import humanGame, debugGame, trainingGame, train, runTests
 from AI.Algorithms.DQN import getRandomDQNAgents
 from AI.Rewards.Reward import computeReward
 
-        
+
 def save_training_parameters(csv_path, **params):
     """
     Saves training parameters to a CSV using pandas.
@@ -51,8 +50,7 @@ if(__name__ == "__main__"):
     
     players_number = (1,0)
 
-    dimensions = (Settings.ENTRY_NEURONS, 2**6, 2**5, 2**4, 3)
-    sync_rate = 1000
+    dimensions = (Settings.ENTRY_NEURONS, 2**6, 2**6, 2**5, 3)
     batch_size = 512
     lr = 1e-4
     gamma = 0.99
@@ -68,6 +66,7 @@ if(__name__ == "__main__"):
 
     starting_max_steps = 250
     ending_max_steps = 250
+    sync_rate = 1000
 
     display = False
     simulation_speed = 10.0
@@ -77,12 +76,21 @@ if(__name__ == "__main__"):
     linear_decay = True
 
     scoring_function = computeReward
+    reward_coeff_dict = {
+        "static_reward": -0.01,
+        "delta_ball_player_coeff": 0.05,
+        "delta_ball_goal_coeff": 0.1,
+        "can_shoot_coeff": 0,
+        "goal_coeff": 5,
+        "wrong_goal_coeff": -5
+        }
 
     cuda = False #torch.cuda.is_available()
 
     n_players = players_number[0] + players_number[1]
     agents = getRandomDQNAgents(n=n_players, dimensions=dimensions, batch_size=batch_size, lr=lr, sync_rate=sync_rate, buffer_size=buffer_size, 
-                           epsilon_decay=epsilon_decay, linear_decay=True, epsilon=epsilon, epsilon_min=epsilon_min, gamma=gamma, cuda=cuda)
+                           epsilon_decay=epsilon_decay, linear_decay=True, epsilon=epsilon, epsilon_min=epsilon_min, gamma=gamma, 
+                           scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict, cuda=cuda)
 
 
 
@@ -110,23 +118,41 @@ if(__name__ == "__main__"):
         ending_max_steps=ending_max_steps,
         epsilon_decay=epsilon_decay,
         linear_decay=linear_decay,
-        scoring_function=scoring_function
+        scoring_function=scoring_function,
+        reward_coeff_dict=reward_coeff_dict
     )
-    save_training_parameters(save_folder + "training_parameters.csv", **kwargs)
+    
 
-    train(players_number, agents, num_episodes, scoring_function, save_folder, 
+    save_training_parameters(save_folder + "training_parameters.csv", **kwargs)
+    
+    
+    train(players_number, agents, num_episodes, save_folder, 
           wait_rate=wait_rate, exploration_rate=exploration_rate, 
           starting_max_steps=starting_max_steps, ending_max_steps=ending_max_steps, 
           display=display, simulation_speed=simulation_speed, moyenne_ratio=0.05)
     
     """
-    agents[0].load("C:/.Ingé/Projet-Sport-Co-Networks/Suivi_test_step=27.3_fail=0.28")
-    #debugGame(players_number, agents)
+    import cProfile
+    import pstats
     
+    prof = cProfile.Profile()
+    prof.run("train(players_number, agents, num_episodes, save_folder, wait_rate=wait_rate, exploration_rate=exploration_rate, starting_max_steps=starting_max_steps, ending_max_steps=ending_max_steps, display=display, simulation_speed=simulation_speed, moyenne_ratio=0.05, end_test=False)")
+    prof.dump_stats('output.prof')
     
-    runTests(players_number=players_number, agents=agents, scoring_function=scoring_function, max_steps=ending_max_steps, nb_tests=10_000)
+    with open(save_folder + 'profiled.txt', 'w') as stream:
+        stats = pstats.Stats('output.prof', stream=stream)
+        stats.sort_stats('cumtime')
+        stats.print_stats()
     """
-
+    
+    """
+    agents[0].load("C:/.Ingé/Projet-Sport-Co-Networks/fail=0.03_step=83.3/0_best")
+    debugGame(players_number, agents)
+    """
+    
+    #runTests(players_number=players_number, agents=agents, max_steps=ending_max_steps, nb_tests=10_000)
+    
+                           
 
 
 
