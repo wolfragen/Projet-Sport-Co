@@ -12,7 +12,7 @@ import Settings
 from Engine.Actions import canShoot
 
 
-def computeReward(player, action, ball, left_goal_position, right_goal_position, score, training_progression=0.0):
+def computeReward(coeff_dict, player, action, ball, left_goal_position, right_goal_position, score, training_progression=0.0):
         
     body, shape = player
     ball_body, ball_shape = ball
@@ -27,11 +27,12 @@ def computeReward(player, action, ball, left_goal_position, right_goal_position,
         
     alpha, beta = 1.0, 1.0  # relative weights
     
-    static_reward = -0.005
-    delta_ball_player_coeff = 0.05
-    delta_ball_goal_coeff = 0.1
-    can_shoot_coeff = 0.01
-    goal_coeff = 5
+    static_reward = coeff_dict["static_reward"]
+    delta_ball_player_coeff = coeff_dict["delta_ball_player_coeff"]
+    delta_ball_goal_coeff = coeff_dict["delta_ball_goal_coeff"]
+    can_shoot_coeff = coeff_dict["can_shoot_coeff"]
+    goal_coeff = coeff_dict["goal_coeff"]
+    wrong_goal_coeff = coeff_dict["wrong_goal_coeff"]
     
     
     body, shape = player
@@ -41,7 +42,7 @@ def computeReward(player, action, ball, left_goal_position, right_goal_position,
         elif (not shape.left_team) and score[1] == 1:
             return goal_coeff
         else:
-            return -goal_coeff
+            return wrong_goal_coeff
     
     # Delta position of player
     dx = (body.position[0] - body.previous_position[0])
@@ -88,10 +89,10 @@ def computeReward(player, action, ball, left_goal_position, right_goal_position,
         delta_ball_goal_reward = max(-delta_ball_goal_coeff, min(delta_ball_goal_reward, delta_ball_goal_coeff))
         
     can_shoot_reward = 0
-    if(canShoot(body, ball_body)):
+    if(body.canShoot and action == 3):
         can_shoot_reward = can_shoot_coeff
     elif(action == 3):
-        can_shoot_reward = - can_shoot_coeff
+        can_shoot_reward = - can_shoot_coeff*0.1
     
     reward = (static_reward + delta_ball_goal_reward + delta_ball_player_reward + can_shoot_reward)
 
@@ -113,6 +114,8 @@ def point_to_segment_distance(px, py, x1, y1, x2, y2):
     b = c1 / c2
     bx, by = x1 + b * vx, y1 + b * vy
     return np.hypot(px - bx, py - by)
+
+
 
 
 

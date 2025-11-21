@@ -8,6 +8,7 @@ Created on Sun Oct 12 14:23:39 2025
 import pymunk
 
 import Settings
+from Engine.Actions import canShoot
 
 
 def createSpace():
@@ -69,6 +70,13 @@ def checkPlayersOut(players: list[tuple]) -> None:
         body.previous_position = body.position
         
     return 
+
+def checkPlayersCanShoot(players, ball):
+    ball_body = ball[0]
+    for player in players:
+        player_body = player[0]
+        player_body.canShoot = canShoot(player_body, ball_body)
+    return
 
 
 
