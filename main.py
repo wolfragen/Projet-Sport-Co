@@ -82,7 +82,7 @@ if(__name__ == "__main__"):
         "delta_ball_goal_coeff": 0.1,
         "can_shoot_coeff": 0,
         "goal_coeff": 5,
-        "wrong_goal_coeff": -5
+        "wrong_goal_coeff": 0
         }
 
     cuda = False #torch.cuda.is_available()
