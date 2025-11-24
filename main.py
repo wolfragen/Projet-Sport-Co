@@ -50,23 +50,26 @@ if(__name__ == "__main__"):
     
     players_number = (1,0)
 
-    dimensions = (Settings.ENTRY_NEURONS, 2**6, 2**6, 2**5, 3)
-    batch_size = 512
-    lr = 1e-4
+    dimensions = (Settings.ENTRY_NEURONS, 2**7, 2**7, 2**6, 9)
+    batch_size = 128
+    lr = 1e-5
     gamma = 0.99
     buffer_size = 100_000
 
     epsilon = 0.8
-    epsilon_min = 0.1
+    epsilon_min = 0.05
 
-    num_episodes = 5_000
+    num_episodes = 50_000
     wait_rate = 0
     exploration_rate = 0.5 - wait_rate # à x%, on atteint le min d'epsilon, en incluant le temps "stagnant"
     num_wait = round(num_episodes*wait_rate) # number of episodes to wait until epsilon decay
 
     starting_max_steps = 250
     ending_max_steps = 250
+    
+    soft_update = True
     sync_rate = 1000
+    tau = 5e-3
 
     display = False
     simulation_speed = 10.0
@@ -82,14 +85,14 @@ if(__name__ == "__main__"):
         "delta_ball_goal_coeff": 0.1,
         "can_shoot_coeff": 0,
         "goal_coeff": 5,
-        "wrong_goal_coeff": 0
+        "wrong_goal_coeff": -5
         }
 
     cuda = False #torch.cuda.is_available()
 
     n_players = players_number[0] + players_number[1]
     agents = getRandomDQNAgents(n=n_players, dimensions=dimensions, batch_size=batch_size, lr=lr, sync_rate=sync_rate, buffer_size=buffer_size, 
-                           epsilon_decay=epsilon_decay, linear_decay=True, epsilon=epsilon, epsilon_min=epsilon_min, gamma=gamma, 
+                           epsilon_decay=epsilon_decay, linear_decay=True, epsilon=epsilon, epsilon_min=epsilon_min, gamma=gamma, soft_update=soft_update, tau=tau, 
                            scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict, cuda=cuda)
 
 
@@ -103,6 +106,8 @@ if(__name__ == "__main__"):
     
     kwargs = dict(
         players_number=players_number,
+        soft_update=soft_update,
+        tau=tau,
         sync_rate=sync_rate,
         batch_size=batch_size,
         lr=lr,
@@ -149,7 +154,6 @@ if(__name__ == "__main__"):
     agents[0].load("C:/.Ingé/Projet-Sport-Co-Networks/fail=0.03_step=83.3/0_best")
     debugGame(players_number, agents)
     """
-    
     #runTests(players_number=players_number, agents=agents, max_steps=ending_max_steps, nb_tests=10_000)
     
                            

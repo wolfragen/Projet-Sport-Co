@@ -18,7 +18,7 @@ from AI.Network import DeepRLNetwork
 
 class DQNAgent:
     def __init__(self, dimensions, scoring_function, reward_coeff_dict, batch_size, lr, sync_rate, buffer_size, epsilon_decay, linear_decay=True, 
-                 epsilon=1.0, epsilon_min=0.05, gamma=0.99, betas=(0.9, 0.999), eps=1e-8,
+                 epsilon=1.0, epsilon_min=0.05, gamma=0.99, betas=(0.9, 0.999), eps=1e-8, soft_update=True, tau=5e-3,
                  random=False, cuda=False):
         self.batch_size = batch_size
         self.action_dim = dimensions[-1]
@@ -58,6 +58,9 @@ class DQNAgent:
         self.targetNetwork.eval()
 
         self.sync_rate = sync_rate
+        self.soft_update = soft_update
+        self.tau = tau
+        
         self.sync_value = 0
 
         # Optimizer & Loss
@@ -118,11 +121,14 @@ class DQNAgent:
         if indices is not None:
             self.memory.update_priorities(indices, td_errors.detach().abs())
 
-        # Target network sync
-        self.sync_value += 1
-        if self.sync_value >= self.sync_rate:
-            self.sync_value = 0
-            self.syncTargetNetwork()
+        if self.soft_update:
+            self.softUpdateNetwork()
+        else:
+            # Target network sync
+            self.sync_value += 1
+            if self.sync_value >= self.sync_rate:
+                self.sync_value = 0
+                self.syncTargetNetwork()
 
     def decayEpsilon(self):
         if self.linear_decay:
@@ -133,6 +139,13 @@ class DQNAgent:
     def syncTargetNetwork(self):
         self.targetNetwork.load_state_dict(self.onlineNetwork.state_dict())
         self.targetNetwork.eval()
+    
+    def softUpdateNetwork(self):
+        with torch.no_grad():
+            for target_param, online_param in zip(self.targetNetwork.parameters(),
+                                                  self.onlineNetwork.parameters()):
+                target_param.data.mul_(1.0 - self.tau)
+                target_param.data.add_(self.tau * online_param.data)
 
     def save(self, path):
         torch.save(self.onlineNetwork.state_dict(), path)
@@ -144,12 +157,12 @@ class DQNAgent:
 
 
 def getRandomDQNAgents(n, dimensions, scoring_function, reward_coeff_dict, batch_size=128, lr=3e-4, sync_rate=1000, buffer_size=50_000, 
-                       epsilon_decay=0.99995, linear_decay=True, epsilon=1.0, epsilon_min=0.05, gamma=0.99, 
+                       epsilon_decay=0.99995, linear_decay=True, epsilon=1.0, epsilon_min=0.05, gamma=0.99, soft_update=True, tau=5e-3, 
                        betas=(0.9, 0.999), eps=1e-8, cuda=False):
     agents = []
     for i in range(n):
         agents.append(DQNAgent(dimensions=dimensions, batch_size=batch_size, lr=lr, sync_rate=sync_rate, buffer_size=buffer_size, 
-                               epsilon_decay=epsilon_decay, linear_decay=linear_decay, epsilon=epsilon, epsilon_min=epsilon_min, gamma=gamma, 
+                               epsilon_decay=epsilon_decay, linear_decay=linear_decay, epsilon=epsilon, epsilon_min=epsilon_min, gamma=gamma, soft_update=soft_update, tau=tau, 
                                scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict, betas=betas, eps=eps, random=True, cuda=cuda))
     return agents
 

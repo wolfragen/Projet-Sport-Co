@@ -260,20 +260,24 @@ def train(players_number, agents, num_episodes, save_folder, wait_rate=0.1, expl
             done_history.append(done_mean)
             
             print(f"Episode {episode+1} | Reward: {reward_mean:.2f} | Steps: {step_mean:.1f} | epsilon={epsilon:.2f} | Score: {score_left_mean:.2f} - {score_right_mean:.2f} | Win: {done_mean:.2f} | {speed:.1f} eps/s | {bar} | {progress*100:6.2f}%")
-            if(agents[0].epsilon == agents[0].epsilon_min):
+            if(agents[0].epsilon == agents[0].epsilon_min or agents[0].epsilon <= 0.2):
                 r, s, s_left, s_right, fail_percent = runTests(players_number, agents, max_steps, nb_tests=100, should_print=False)
                 fail_percent_history.append(fail_percent)
                 reward_history_test.append(r)
                 step_history_test.append(s)
                 
-                if(fail_percent < min_fail_percent and min_fail_percent-fail_percent >= 0.01):
+                if(fail_percent < min_fail_percent and (min_fail_percent-fail_percent >= 0.01 or fail_percent < min_fail_percent*4/5)):
                     # Enlever la partie aléatoire : on regarde sur 1000 tests si on a eu un bon résultat.
                     
                     r, s, s_left, s_right, fail_percent = runTests(players_number, agents, max_steps, nb_tests=1000, should_print=False)
-                    if(fail_percent < min_fail_percent and min_fail_percent-fail_percent >= 0.01):
+                    if(fail_percent < min_fail_percent):
                         min_fail_percent = fail_percent
                         for agent_id in range(len(agents)):
                             agent.onlineNetwork.save(save_folder + f"{agent_id}_best")
+                                
+                        if(fail_percent < 0.005):
+                            print("Early stopping, agent fully trained !")
+                            break
                         
             else:
                 fail_percent_history.append(None)
@@ -370,14 +374,15 @@ def runTests(players_number, agents, max_steps, training_progression=1.0, nb_tes
         score_left += score[0]
         score_right += score[1]
         
-        if(not result.success):
+        if(score[0] != 1):
             nb_fail += 1
         
         if((episode+1)%(nb_tests/10) == 0 and should_print):
             print(f"Tests en cours: {(episode+1)/nb_tests*100}%")
     
-    print(f"{nb_tests} tests | Reward: {rewards/nb_tests:.2f} | Steps: {steps/nb_tests:.1f} | Score: {score_left/nb_tests:.2f} / {score_right/nb_tests:.2f} | failed: {nb_fail/nb_tests:.2f}")
+    print(f"{nb_tests} tests | Reward: {rewards/nb_tests:.2f} | Steps: {steps/nb_tests:.1f} | Score: {score_left/nb_tests:.2f} / {score_right/nb_tests:.2f} | failed: {nb_fail/nb_tests:.3f}")
     return rewards/nb_tests, steps/nb_tests, score_left/nb_tests, score_right/nb_tests, nb_fail/nb_tests
+
 
 
 
