@@ -21,6 +21,19 @@ from AI.AIActions import play
 from Player.PlayerActions import process_events
 
 class LearningEnvironment():
+    """_summary_
+
+    Args:
+        done (bool): If True, then the game is over and must b stopped
+        human (bool): If True, a human player control one of the player
+        player_number (tuple[int, int]): The number of player in each team 
+        scoring_function (Callable): The reward function use to train and reward the agents
+        training_progression (float): The advancement of the training. By default 0
+        display (bool): If True, show the game on a display
+        simulation_speed (float): The speed of the simulation. By default 1.0
+        screen (pygame.Surface): The main Pygame display surface used for rendering the game. 
+        draw_options (pymunk.pygame_util.DrawOptions): The drawing configuration object for rendering Pymunk objects.
+    """
     def __init__(self, players_number: list[int,int], scoring_function: Callable, training_progression=0.0,
         display: bool = False, simulation_speed: float = 1.0, screen=None, draw_options=None, human=False):
         
