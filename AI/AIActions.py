@@ -33,6 +33,12 @@ def play(player, ball, action) -> np.array:
     speed = Settings.PLAYER_SPEED
     rotation_speed = Settings.PLAYER_ROT_SPEED
     
+    if(type(action) != int):
+        if(action[2] > 0.1):
+            Actions.shoot(player,ball, power=action[2])
+        Actions.move(player, speed=action[0]*speed, rotation_speed=action[1]*rotation_speed)
+        return
+    
     if action == 0:
         # Move forward
         Actions.move(player, speed=speed)
@@ -43,6 +49,10 @@ def play(player, ball, action) -> np.array:
         # Rotate right
         Actions.move(player, rotation_speed=rotation_speed)
         
+    elif action == 3:
+        Actions.shoot(player,ball)
+        
+        """
     elif action == 3:
         # Move forward
         Actions.move(player, speed=speed*0.6)
@@ -71,7 +81,7 @@ def play(player, ball, action) -> np.array:
         Actions.shoot(player, ball, power=0.6)
     elif action == 11:
         # Shoot
-        Actions.shoot(player, ball, power=0.3)
+        Actions.shoot(player, ball, power=0.3)"""
         
         
         """

@@ -5,144 +5,156 @@ Created on Fri Oct 24 17:50:19 2025
 @author: quent
 """
 
+import pytest
 import math
 import numpy as np
-import pymunk
 
-import Settings
-from Engine.Actions import reset_movements, move, shoot, canShoot
+from Engine import Actions
 
 
-def test_move_and_reset_movements_basic():
-    """
-    Test basic move and reset_movements behavior for players.
-    """
+# -------------------------------------------------------------------
+# Mock des objets pymunk
+# -------------------------------------------------------------------
+class MockBody:
+    def __init__(self, position=(0, 0), angle=0):
+        self.position = np.array(position, dtype=float)
+        self.angle = angle
+        self.velocity = np.array([0.0, 0.0])
+        self.angular_velocity = 0.0
+        self.canShoot = True  # utilisé dans shoot()
 
-    # --- 1. Mock Settings ---
-    Settings.PLAYER_LEN = 10
-    Settings.PLAYER_SHOOTING_RANGE = 5
-    Settings.SHOOTING_SPEED = 10
-    Settings.BALL_RADIUS = 1.0
-
-    # --- 2. Create a minimal player and ball ---
-    player_body = pymunk.Body(1, 1)
-    player_body.position = (0, 0)
-    player_body.angle = 0
-    player_shape = pymunk.Circle(player_body, radius=5)
-
-    player = (player_body, player_shape)
-
-    # --- 3. Test move ---
-    move(player, speed=5, rotation_speed=1)
-    expected_vx = 5 * math.cos(player_body.angle)
-    expected_vy = 5 * math.sin(player_body.angle)
-    assert math.isclose(player_body.velocity.x, expected_vx, rel_tol=1e-6)
-    assert math.isclose(player_body.velocity.y, expected_vy, rel_tol=1e-6)
-    assert math.isclose(player_body.angular_velocity, 1, rel_tol=1e-6)
-    assert player_body.previous_position == player_body.position
-    assert player_body.previous_angle == player_body.angle
-
-    # --- 4. Test reset_movements ---
-    game = {"players": [player]}
-    reset_movements(game)
-    assert math.isclose(player_body.velocity.x, 0, rel_tol=1e-6)
-    assert math.isclose(player_body.velocity.y, 0, rel_tol=1e-6)
-    assert math.isclose(player_body.angular_velocity, 0, rel_tol=1e-6)
+class MockShape:
+    pass
 
 
-def test_canShoot_behavior():
-    """
-    Test canShoot with different distances between player and ball.
-    """
-    Settings.PLAYER_LEN = 10
-    Settings.PLAYER_SHOOTING_RANGE = 5
-    Settings.BALL_RADIUS = 1.0
-
-    player_body = pymunk.Body(1, 1)
-    player_body.position = (0, 0)
-    player_body.angle = 0
-
-    ball_body = pymunk.Body(1, 1)
-
-    # Ball too far
-    ball_body.position = (20, 0)
-    assert not canShoot(player_body, ball_body)
-
-    # Ball in range
-    ball_body.position = (Settings.PLAYER_LEN/2 + Settings.BALL_RADIUS + 3, 0)
-    assert canShoot(player_body, ball_body)
-
-    # Ball just at the edge
-    ball_body.position = (Settings.PLAYER_LEN/2 + Settings.BALL_RADIUS + Settings.PLAYER_SHOOTING_RANGE, 0)
-    assert canShoot(player_body, ball_body)
+# -------------------------------------------------------------------
+# Mock Settings
+# -------------------------------------------------------------------
+class MockSettings:
+    SHOOTING_SPEED = 10.0
+    PLAYER_LEN = 2.0
+    PLAYER_SHOOTING_RANGE = 3.0
+    BALL_RADIUS = 0.5
 
 
-def test_shoot_moves_ball(monkeypatch):
-    """
-    Test shoot() applies velocity to the ball correctly if canShoot returns True.
-    """
+# Remplace Settings
+@pytest.fixture(autouse=True)
+def mock_settings(monkeypatch):
+    monkeypatch.setattr(Actions, "Settings", MockSettings)
+    
 
-    Settings.PLAYER_LEN = 10
-    Settings.PLAYER_SHOOTING_RANGE = 5
-    Settings.SHOOTING_SPEED = 10
-    Settings.BALL_RADIUS = 1.0
+# -------------------------------------------------------------------
+# TEST move()
+# -------------------------------------------------------------------
+def test_move_basic():
+    body = MockBody(position=(0, 0), angle=0)
+    shape = MockShape()
 
-    player_body = pymunk.Body(1, 1)
-    player_body.position = (0, 0)
-    player_body.angle = 0
-    player_body.velocity = (3, 0)
-    player_shape = pymunk.Circle(player_body, 5)
-    player = (player_body, player_shape)
+    Actions.move((body, shape), speed=5, rotation_speed=2)
 
-    ball_body = pymunk.Body(1, 1)
-    ball_body.position = (7, 0)  # within shooting range
-    ball_shape = pymunk.Circle(ball_body, Settings.BALL_RADIUS)
-    ball = (ball_body, ball_shape)
-
-    # Patch canShoot to force True
-    monkeypatch.setattr("Engine.Actions.canShoot", lambda player_body, ball_body, max_distance=None: True)
-
-    # Patch move to record arguments
-    called_args = {}
-    def fake_move(entity, speed=0, rotation_speed=0):
-        called_args["entity"] = entity
-        called_args["speed"] = speed
-        called_args["rotation_speed"] = rotation_speed
-    monkeypatch.setattr("Engine.Actions.move", fake_move)
-
-    shoot(player, ball, power=2.0)
-
-    # Check that move was called on the ball
-    assert called_args["entity"] == ball
-    expected_speed = np.linalg.norm(player_body.velocity) + Settings.SHOOTING_SPEED * 2.0
-    assert math.isclose(called_args["speed"], expected_speed, rel_tol=1e-6)
+    assert np.allclose(body.velocity, [5, 0])
+    assert body.angular_velocity == 2
 
 
-def test_shoot_does_not_move_ball_if_cannot_shoot(monkeypatch):
-    """
-    Test shoot() does not move the ball if canShoot returns False.
-    """
-    Settings.PLAYER_LEN = 10
-    Settings.PLAYER_SHOOTING_RANGE = 5
-    Settings.SHOOTING_SPEED = 10
-    Settings.BALL_RADIUS = 1.0
+def test_move_with_angle():
+    body = MockBody(position=(0, 0), angle=math.pi / 2)
+    shape = MockShape()
 
-    player_body = pymunk.Body(1, 1)
-    player_body.position = (0, 0)
-    player_body.angle = 0
-    player_shape = pymunk.Circle(player_body, 5)
-    player = (player_body, player_shape)
+    Actions.move((body, shape), speed=4)
 
-    ball_body = pymunk.Body(1, 1)
-    ball_body.position = (20, 0)
-    ball_shape = pymunk.Circle(ball_body, Settings.BALL_RADIUS)
-    ball = (ball_body, ball_shape)
+    assert np.allclose(body.velocity, [0, 4], atol=1e-6)
 
-    monkeypatch.setattr("Engine.Actions.canShoot", lambda player_body, ball_body, max_distance=None: False)
-    called = {"moved": False}
-    def fake_move(entity, speed=0, rotation_speed=0):
-        called["moved"] = True
-    monkeypatch.setattr("Engine.Actions.move", fake_move)
 
-    shoot(player, ball)
-    assert not called["moved"]
+# -------------------------------------------------------------------
+# TEST reset_movements()
+# -------------------------------------------------------------------
+def test_reset_movements():
+    players = [(MockBody(angle=1.2), MockShape()), (MockBody(angle=0.5), MockShape())]
+
+    # Vitesses initiales
+    for p, _ in players:
+        p.velocity = np.array([3, 4])
+        p.angular_velocity = 5
+
+    Actions.reset_movements(players)
+
+    for p, _ in players:
+        assert np.allclose(p.velocity, [0, 0])
+        assert p.angular_velocity == 0
+
+
+# -------------------------------------------------------------------
+# TEST define_previous_pos()
+# -------------------------------------------------------------------
+def test_define_previous_pos():
+    players = [(MockBody(position=(1, 2), angle=0.5), MockShape())]
+    ball = (MockBody(position=(5, 5)), MockShape())
+
+    Actions.define_previous_pos(players, ball)
+
+    assert np.allclose(players[0][0].previous_position, [1, 2])
+    assert players[0][0].previous_angle == 0.5
+    assert np.allclose(ball[0].previous_position, [5, 5])
+
+
+# -------------------------------------------------------------------
+# TEST shoot()
+# -------------------------------------------------------------------
+def test_shoot_when_canShoot_true(monkeypatch):
+    player = (MockBody(position=(0, 0), angle=0), MockShape())
+    ball = (MockBody(position=(0, 0), angle=0), MockShape())
+
+    player[0].velocity = np.array([3, 4])  # vitesse initiale → norme = 5
+
+    Actions.shoot(player, ball, power=1.0)
+
+    expected_speed = 5 + MockSettings.SHOOTING_SPEED
+    assert np.allclose(ball[0].velocity, [expected_speed, 0])
+
+
+def test_shoot_when_canShoot_false():
+    player = (MockBody(position=(0, 0)), MockShape())
+    ball = (MockBody(position=(0, 0)), MockShape())
+
+    player[0].canShoot = False
+
+    Actions.shoot(player, ball)
+
+    # Aucune modification
+    assert np.allclose(ball[0].velocity, [0, 0])
+
+
+# -------------------------------------------------------------------
+# TEST canShoot()
+# -------------------------------------------------------------------
+def test_canShoot_true():
+    player = MockBody(position=(0, 0), angle=0)
+    ball = MockBody(position=(2.2, 0))
+
+    # FRONT du joueur = 1.0 unité devant lui (PLAYER_LEN/2)
+    # Distance front → balle bord = (distance 2.2 - 0.5 BALL_RADIUS) = 1.7 <= 3.0 ⇒ TRUE
+    assert Actions.canShoot(player, ball, Actions.Settings.PLAYER_SHOOTING_RANGE)
+
+
+def test_canShoot_false():
+    player = MockBody(position=(0, 0), angle=0)
+    ball = MockBody(position=(10, 0))
+    assert not Actions.canShoot(player, ball, Actions.Settings.PLAYER_SHOOTING_RANGE)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
