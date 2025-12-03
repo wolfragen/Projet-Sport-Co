@@ -16,7 +16,7 @@ import pandas as pd
 import Settings
 from Play import humanGame, debugGame
 from AI.Algorithms.DQN import getRandomDQNAgents, dqn_train, runTests
-from AI.Algorithms.NEAT import neat_train
+#from AI.Algorithms.NEAT import neat_train
 from AI.Rewards.Reward import computeReward
 
 
@@ -65,13 +65,13 @@ if(__name__ == "__main__"):
     epsilon = 0.8
     epsilon_min = 0.05
 
-    num_episodes = 10_000
+    num_episodes = 5_000
     wait_rate = 0
     exploration_rate = 0.5 - wait_rate # à x%, on atteint le min d'epsilon, en incluant le temps "stagnant"
     num_wait = round(num_episodes*wait_rate) # number of episodes to wait until epsilon decays
 
-    starting_max_steps = 250
-    ending_max_steps = 250
+    starting_max_steps = 100
+    ending_max_steps = 100
     
     soft_update = True
     sync_rate = 1000
@@ -108,7 +108,7 @@ if(__name__ == "__main__"):
     # debugGame(players_number, agents, scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict, human=False)"""
     
     
-    save_folder = "C:/.ingé/Projet-Sport-Co-Networks/"
+    save_folder = "home/Diego/projet_INFOIA/Agents"
     
     kwargs = dict(
         players_number=players_number,
@@ -136,16 +136,19 @@ if(__name__ == "__main__"):
     
     save_training_parameters(save_folder + "training_parameters.csv", **kwargs)
     
-    """
+    
     dqn_train(players_number, agents, scoring_function, reward_coeff_dict, num_episodes, save_folder, 
           wait_rate=wait_rate, exploration_rate=exploration_rate, 
           starting_max_steps=starting_max_steps, ending_max_steps=ending_max_steps, 
-          display=display, simulation_speed=simulation_speed, moyenne_ratio=0.05)"""
+          display=display, simulation_speed=simulation_speed, moyenne_ratio=0.05)
     
+    """
     config_file = "C:/.ingé/EI2/Projet-Sport-Co/AI/Algorithms/config_feed-forward_neat.cfg"
     neat_train(config_file=config_file, players_number=players_number, generations=100, n_eval=20, max_steps=250,
                    scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict)
     
+    """
+
     """
     import cProfile
     import pstats
