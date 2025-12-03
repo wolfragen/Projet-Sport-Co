@@ -102,7 +102,7 @@ def shoot(player: tuple[pymunk.Body, pymunk.Shape],
     player_body, player_shape = player
     
     # Only allow shooting if ball is reachable
-    if not canShoot(player_body, ball_body):
+    if not player_body.canShoot:
         return
     
     # Compute the shooting speed: current player speed + base shooting speed scaled by power

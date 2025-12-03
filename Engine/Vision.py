@@ -141,13 +141,16 @@ def getVision(space, player: tuple[pymunk.Body, pymunk.Shape], ball, left_goal_p
     vision_array[2:4] = (ball_body.position[0] - body.position[0]) / dim_x, (ball_body.position[1] - body.position[1]) / dim_y
     vision_array[4:6] = (left_goal_position[0] - body.position[0]) / dim_x, (left_goal_position[1] - body.position[1]) / dim_y
     vision_array[6:8] = (right_goal_position[0] - body.position[0]) / dim_x, (right_goal_position[1] - body.position[1]) / dim_y
+    vision_array[8] = int(body.canShoot)
 
+    """ # TODO: remettre si on remet le ray Tracing
     # Normalize ray distances and copy one-hot info
     ray_data = rayTracing(space, player)
     ray_data[::8] = ray_data[::8] / dim_x
     ray_data[1::8] = ray_data[1::8] / dim_y
     vision_array[8:] = ray_data.flatten()
-
+    """
+    
     return vision_array
 
 

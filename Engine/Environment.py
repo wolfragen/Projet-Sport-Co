@@ -5,13 +5,12 @@ Created on Thu Oct 30 19:15:11 2025
 @author: quent
 """
 
-from typing import Callable
 import numpy as np
 import pygame
 
 import Settings
 from Graphics.GraphicEngine import display, startDisplay
-from Engine.Utils import checkIfGoal, createSpace, checkPlayersOut
+from Engine.Utils import checkIfGoal, createSpace, checkPlayersOut, checkPlayersCanShoot
 from Engine.Entity.Board import buildBoard
 from Engine.Entity.Ball import buildBall
 from Engine.Entity.Player import buildPlayers
@@ -21,6 +20,7 @@ from AI.AIActions import play
 from Player.PlayerActions import process_events
 
 class LearningEnvironment():
+<<<<<<< HEAD
     """_summary_
 
     Args:
@@ -35,6 +35,9 @@ class LearningEnvironment():
         draw_options (pymunk.pygame_util.DrawOptions): The drawing configuration object for rendering Pymunk objects.
     """
     def __init__(self, players_number: list[int,int], scoring_function: Callable, training_progression=0.0,
+=======
+    def __init__(self, players_number: list[int,int], scoring_function, reward_coeff_dict, training_progression=0.0,
+>>>>>>> main
         display: bool = False, simulation_speed: float = 1.0, screen=None, draw_options=None, human=False):
         
         self.done = False
@@ -44,8 +47,9 @@ class LearningEnvironment():
         self.n_players = players_number[0] + players_number[1]
         self.previous_actions = [-1 for i in range(self.n_players)]
         
-        self.scoring_function = scoring_function
         self.training_progression = training_progression
+        self.scoring_function = scoring_function
+        self.reward_coeff_dict = reward_coeff_dict
         
         self.display = display
         self.screen = screen
@@ -68,6 +72,7 @@ class LearningEnvironment():
             space.step(0.001)
 
         reset_movements(self.players)
+        checkPlayersCanShoot(self.players, self.ball)
         self._checkIfDone()
         
         if self.display:
@@ -91,7 +96,8 @@ class LearningEnvironment():
     def getReward(self, player_id):
         player = self.players[player_id]
         action = self.previous_actions[player_id]
-        return self.scoring_function(player, action, self.ball, self.left_goal_position, self.right_goal_position, self.score, self.training_progression)
+        return self.scoring_function(self.reward_coeff_dict, player, action, self.ball, self.left_goal_position, 
+                                       self.right_goal_position, self.score, self.training_progression)
     
     def isDone(self):
         return self.done
@@ -109,6 +115,7 @@ class LearningEnvironment():
         self.players, self.players_left, self.players_right, self.selected_player = buildPlayers(space, self.players_number, self.human) # Creates the players
         self.space = space
         define_previous_pos(self.players, self.ball)
+        checkPlayersCanShoot(self.players, self.ball)
         
     def _initDisplay(self, simulation_speed):
         if(self.screen == None or self.draw_options == None):
