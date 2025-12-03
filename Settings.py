@@ -17,7 +17,7 @@ SCORE_COLOR = (255, 215, 0) # text color for the score
 # Terrain :
 DIM_X = 750 # px
 DIM_Y = 500 # px
-GOAL_LEN = 498 # px
+GOAL_LEN = 250 # px
 GROUND_FRICTION = 0.5
 LEFT_GOAL_COLLISION_TYPE = 10 # Necessary to differenciate the left and right goals
 RIGHT_GOAL_COLLISION_TYPE = 11 # Necessary to differenciate the left and right goals
@@ -53,7 +53,7 @@ PLAYER_ROT_SPEED = np.pi*0.75 # rad/s
 NUMBER_OF_RAYS = 0
 RAY_ANGLE = 2*np.pi # rad, total angle to cover with rayTracing
 VISION_RANGE = MAX_DIST # Limits the range of rays for rayTracing. "inf" by default here.
-ENTRY_NEURONS = NUMBER_OF_RAYS*8 + 8
+ENTRY_NEURONS = NUMBER_OF_RAYS*8 + 9
 
 
 

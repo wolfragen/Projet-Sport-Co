@@ -89,9 +89,15 @@ def computeReward(coeff_dict, player, action, ball, left_goal_position, right_go
         delta_ball_goal_reward = max(-delta_ball_goal_coeff, min(delta_ball_goal_reward, delta_ball_goal_coeff))
         
     can_shoot_reward = 0
-    if(body.canShoot and action == 3):
+    if isinstance(action, np.ndarray):
+        shoot_signal = float(action[2])
+        is_shoot = shoot_signal > 0.1
+    else:
+        is_shoot = action == 3
+    
+    if body.canShoot and is_shoot:
         can_shoot_reward = can_shoot_coeff
-    elif(action == 3):
+    elif is_shoot:
         can_shoot_reward = - can_shoot_coeff*0.1
     
     reward = (static_reward + delta_ball_goal_reward + delta_ball_player_reward + can_shoot_reward)
