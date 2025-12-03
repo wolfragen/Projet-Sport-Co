@@ -5,6 +5,11 @@ Created on Sat Oct 11 16:10:14 2025
 @author: quent
 """
 
+import warnings
+warnings.filterwarnings("ignore", message="pkg_resources is deprecated", module="pygame.pkgdata")
+warnings.filterwarnings("ignore", message="Your system is avx2 capable")
+import pygame
+
 import math
 import pandas as pd
 
@@ -138,7 +143,7 @@ if(__name__ == "__main__"):
           display=display, simulation_speed=simulation_speed, moyenne_ratio=0.05)"""
     
     config_file = "C:/.ingé/EI2/Projet-Sport-Co/AI/Algorithms/config_feed-forward_neat.cfg"
-    neat_train(config_file=config_file, players_number=players_number, generations=100, n_eval=10, max_steps=250,
+    neat_train(config_file=config_file, players_number=players_number, generations=100, n_eval=20, max_steps=250,
                    scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict)
     
     """
