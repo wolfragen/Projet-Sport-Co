@@ -327,7 +327,7 @@ def dqn_train(players_number, agents, scoring_function, reward_coeff_dict, num_e
             
             print(f"Episode {episode+1} | Reward: {reward_mean:.2f} | Steps: {step_mean:.1f} | epsilon={epsilon:.2f} | Score: {score_left_mean:.2f} - {score_right_mean:.2f} | Win: {done_mean:.2f} | {speed:.1f} eps/s | {bar} | {progress*100:6.2f}%")
             if(agents[0].epsilon == agents[0].epsilon_min or agents[0].epsilon <= 0.2):
-                r, s, s_left, s_right, fail_percent = runTests(players_number, agents, max_steps, nb_tests=100, should_print=False)
+                r, s, s_left, s_right, fail_percent = runTests(players_number, agents, scoring_function, reward_coeff_dict, max_steps, nb_tests=100, should_print=False)
                 fail_percent_history.append(fail_percent)
                 reward_history_test.append(r)
                 step_history_test.append(s)
@@ -335,7 +335,7 @@ def dqn_train(players_number, agents, scoring_function, reward_coeff_dict, num_e
                 if(fail_percent < min_fail_percent and (min_fail_percent-fail_percent >= 0.01 or fail_percent < min_fail_percent*4/5)):
                     # Enlever la partie aléatoire : on regarde sur 1000 tests si on a eu un bon résultat.
                     
-                    r, s, s_left, s_right, fail_percent = runTests(players_number, agents, max_steps, nb_tests=1000, should_print=False)
+                    r, s, s_left, s_right, fail_percent = runTests(players_number, agents, scoring_function, reward_coeff_dict, max_steps, nb_tests=1000, should_print=False)
                     if(fail_percent < min_fail_percent):
                         min_fail_percent = fail_percent
                         for agent_id in range(len(agents)):

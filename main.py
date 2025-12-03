@@ -65,13 +65,13 @@ if(__name__ == "__main__"):
     epsilon = 0.8
     epsilon_min = 0.05
 
-    num_episodes = 5_000
+    num_episodes = 20_000
     wait_rate = 0
     exploration_rate = 0.5 - wait_rate # à x%, on atteint le min d'epsilon, en incluant le temps "stagnant"
     num_wait = round(num_episodes*wait_rate) # number of episodes to wait until epsilon decays
 
-    starting_max_steps = 100
-    ending_max_steps = 100
+    starting_max_steps = 250
+    ending_max_steps = 250
     
     soft_update = True
     sync_rate = 1000
@@ -89,7 +89,7 @@ if(__name__ == "__main__"):
         "static_reward": -0.002,
         "delta_ball_player_coeff": 0.01,
         "delta_ball_goal_coeff": 0.02,
-        "can_shoot_coeff": 0.1,
+        "can_shoot_coeff": 0.5,
         "goal_coeff": 5,
         "wrong_goal_coeff": -1
         }
@@ -108,39 +108,39 @@ if(__name__ == "__main__"):
     # debugGame(players_number, agents, scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict, human=False)"""
     
     
-    save_folder = "home/Diego/projet_INFOIA/Agents"
+    save_folder = "/home/diego/Projet_INFOIA/Agents"
     
-    kwargs = dict(
-        players_number=players_number,
-        soft_update=soft_update,
-        tau=tau,
-        sync_rate=sync_rate,
-        batch_size=batch_size,
-        lr=lr,
-        gamma=gamma,
-        buffer_size=buffer_size,
-        epsilon=epsilon,
-        epsilon_min=epsilon_min,
-        num_episodes=num_episodes,
-        wait_rate=wait_rate,
-        exploration_rate=exploration_rate,
-        num_wait=num_wait,
-        starting_max_steps=starting_max_steps,
-        ending_max_steps=ending_max_steps,
-        epsilon_decay=epsilon_decay,
-        linear_decay=linear_decay,
-        scoring_function=scoring_function,
-        reward_coeff_dict=reward_coeff_dict
-    )
-    
-    
-    save_training_parameters(save_folder + "training_parameters.csv", **kwargs)
+    # kwargs = dict(
+    #     players_number=players_number,
+    #     soft_update=soft_update,
+    #     tau=tau,
+    #     sync_rate=sync_rate,
+    #     batch_size=batch_size,
+    #     lr=lr,
+    #     gamma=gamma,
+    #     buffer_size=buffer_size,
+    #     epsilon=epsilon,
+    #     epsilon_min=epsilon_min,
+    #     num_episodes=num_episodes,
+    #     wait_rate=wait_rate,
+    #     exploration_rate=exploration_rate,
+    #     num_wait=num_wait,
+    #     starting_max_steps=starting_max_steps,
+    #     ending_max_steps=ending_max_steps,
+    #     epsilon_decay=epsilon_decay,
+    #     linear_decay=linear_decay,
+    #     scoring_function=scoring_function,
+    #     reward_coeff_dict=reward_coeff_dict
+    # )
     
     
-    dqn_train(players_number, agents, scoring_function, reward_coeff_dict, num_episodes, save_folder, 
-          wait_rate=wait_rate, exploration_rate=exploration_rate, 
-          starting_max_steps=starting_max_steps, ending_max_steps=ending_max_steps, 
-          display=display, simulation_speed=simulation_speed, moyenne_ratio=0.05)
+    # save_training_parameters(save_folder + "training_parameters.csv", **kwargs)
+    
+    
+    # dqn_train(players_number, agents, scoring_function, reward_coeff_dict, num_episodes, save_folder, 
+    #       wait_rate=wait_rate, exploration_rate=exploration_rate, 
+    #       starting_max_steps=starting_max_steps, ending_max_steps=ending_max_steps, 
+    #       display=display, simulation_speed=simulation_speed, moyenne_ratio=0.05)
     
     """
     config_file = "C:/.ingé/EI2/Projet-Sport-Co/AI/Algorithms/config_feed-forward_neat.cfg"
@@ -163,12 +163,12 @@ if(__name__ == "__main__"):
         stats.print_stats()
     """
     
-    """
-    agents[0].load("C:/.Ingé/Projet-Sport-Co-Networks/fail=0.017/0_best")
-    debugGame(players_number, agents)
     
-    #runTests(players_number=players_number, agents=agents, max_steps=ending_max_steps, nb_tests=10_000)
-    """
+    agents[0].load(save_folder + "/0_best")
+    debugGame(players_number, agents, scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict)
+    
+    runTests(players_number=players_number, agents=agents, max_steps=ending_max_steps, nb_tests=10_000)
+    
                            
 
 
