@@ -93,7 +93,7 @@ def test_define_previous_pos():
     Actions.define_previous_pos(players, ball)
 
     assert np.allclose(players[0][0].previous_position, [1, 2])
-    assert players[0][0].previous_angle == 0.5
+    assert math.isclose(players[0][0].previous_angle, 0.5, rel_tol=1e-09, abs_tol=1e-09)
     assert np.allclose(ball[0].previous_position, [5, 5])
 
 
