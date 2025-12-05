@@ -46,7 +46,7 @@ class LearningEnvironment():
     def reset(self):
         self._initGame()
         
-    def step(self, human_events = True):
+    def step(self, human_events = True, debug=False):
         
         define_previous_pos(self.players, self.ball)
         
@@ -54,6 +54,8 @@ class LearningEnvironment():
         for _ in range(Settings.DELTA_TIME):
             space.step(0.001)
 
+        rewards = [self.getReward(player_id, debug) for player_id in range(self.n_players)]
+        
         reset_movements(self.players)
         checkPlayersCanShoot(self.players, self.ball)
         self._checkIfDone()
@@ -63,7 +65,6 @@ class LearningEnvironment():
             if(human_events):
                 self._processHumanEvents()
         
-        rewards = [self.getReward(player_id) for player_id in range(self.n_players)]
         checkPlayersOut(self.players) # check for players out of bound
         return rewards
     
@@ -76,11 +77,11 @@ class LearningEnvironment():
         player = self.players[player_id]
         return getVision(self.space, player, self.ball, self.left_goal_position, self.right_goal_position)
     
-    def getReward(self, player_id):
+    def getReward(self, player_id, debug=False):
         player = self.players[player_id]
         action = self.previous_actions[player_id]
         return self.scoring_function(self.reward_coeff_dict, player, action, self.ball, self.left_goal_position, 
-                                       self.right_goal_position, self.score, self.training_progression)
+                                       self.right_goal_position, self.score, self.training_progression, debug)
     
     def isDone(self):
         return self.done

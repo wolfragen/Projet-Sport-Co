@@ -105,7 +105,7 @@ if(__name__ == "__main__"):
 
     agents[0].random = False
     # agents[0].load("C:/.Ingé/Projet-Sport-Co-Networks/score=0.23")
-    # debugGame(players_number, agents, scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict, human=False)"""
+    debugGame(players_number, agents, scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict, human=True)
     
     
     save_folder = "C:/.ingé/Projet-Sport-Co-Networks/"
@@ -142,9 +142,10 @@ if(__name__ == "__main__"):
           starting_max_steps=starting_max_steps, ending_max_steps=ending_max_steps, 
           display=display, simulation_speed=simulation_speed, moyenne_ratio=0.05)"""
     
+    """
     config_file = "C:/.ingé/EI2/Projet-Sport-Co/AI/Algorithms/config_feed-forward_neat.cfg"
     neat_train(config_file=config_file, players_number=players_number, generations=100, n_eval=20, max_steps=250,
-                   scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict)
+                   scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict)"""
     
     """
     import cProfile
