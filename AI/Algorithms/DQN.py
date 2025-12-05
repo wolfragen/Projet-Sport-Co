@@ -230,7 +230,7 @@ def trainingGame(players_number, agents, scoring_function, reward_coeff_dict, ma
     return EpisodeResult(total_reward=total_reward, actions=None, steps=step-1, score=env.score, success=env.isDone(), display=env.display)
 
 
-def updateMoyennes(result, stats):
+def update_moyennes(result, stats):
     score = result.score
     
     stats["moyenne_reward"].append(result.total_reward)
@@ -238,7 +238,7 @@ def updateMoyennes(result, stats):
     stats["moyenne_score_left"].append(score[0])
     stats["moyenne_score_right"].append(score[1])
     stats["moyenne_done"].append(result.success)
-    return
+    
 
 
 def gather_data(players_number, agents, scoring_function, reward_coeff_dict, max_steps, screen, draw_options, 
@@ -250,7 +250,7 @@ def gather_data(players_number, agents, scoring_function, reward_coeff_dict, max
                               max_steps=max_steps, training_progression=0, 
                               display=display, simulation_speed=simulation_speed, screen=screen, draw_options=draw_options, gather_data=True)
         display = result.display
-        updateMoyennes(result, stats)
+        update_moyennes(result, stats)
         
     return display
 
@@ -278,7 +278,8 @@ def progress_bar(episode, agents, num_episodes, start, stats):
     stats["done_history"].append(done_mean)
     
     print(f"Episode {episode+1} | Reward: {reward_mean:.2f} | Steps: {step_mean:.1f} | epsilon={epsilon:.2f} | Score: {score_left_mean:.2f} - {score_right_mean:.2f} | Win: {done_mean:.2f} | {speed:.1f} eps/s | {bar} | {progress*100:6.2f}%")
-    return
+
+    
 
 def init_stats(nb_moyenne):
     stats = {
@@ -302,7 +303,7 @@ def init_stats(nb_moyenne):
         }
     return stats
 
-def updateBestNetwork(agents, players_number, scoring_function, reward_coeff_dict, max_steps, stats, save_folder):
+def update_best_network(agents, players_number, scoring_function, reward_coeff_dict, max_steps, stats, save_folder):
     if(agents[0].epsilon == agents[0].epsilon_min or agents[0].epsilon <= 0.2):
         r, s, s_left, s_right, fail_percent = runTests(players_number=players_number, agents=agents, 
                                                        scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict, 
@@ -351,7 +352,7 @@ def save_stats(agents, stats, save_folder):
         "step_test": stats["step_history_test"],
     })
     df.to_csv(save_folder + "training_data.csv", index=False)
-    return
+    
 
 def dqn_train(players_number, agents, scoring_function, reward_coeff_dict, num_episodes, save_folder, wait_rate=0.1, exploration_rate=0.8, 
           starting_max_steps=100, ending_max_steps=1000, display=False, simulation_speed=1.0, moyenne_ratio=0.1, end_test=True):
@@ -371,8 +372,8 @@ def dqn_train(players_number, agents, scoring_function, reward_coeff_dict, num_e
     nb_moyenne = round(num_episodes*moyenne_ratio)
     stats = init_stats(nb_moyenne)
     
-    display = gather_data(players_number, agents, scoring_function, reward_coeff_dict, max_steps, screen, 
-                          draw_options, display=display, simulation_speed=simulation_speed)
+    display = gather_data(players_number, agents, scoring_function, reward_coeff_dict, max_steps, screen, draw_options, 
+                    stats, display=display, simulation_speed=simulation_speed)
     
     print("Starting training")
     start = time.time()
@@ -384,7 +385,7 @@ def dqn_train(players_number, agents, scoring_function, reward_coeff_dict, num_e
                               display=display, simulation_speed=simulation_speed, screen=screen, draw_options=draw_options, gather_data=False)
         
         display = result.display
-        updateMoyennes(result, stats)
+        update_moyennes(result, stats)
         
         if((episode+1) > num_wait):
             max_steps = min(ending_max_steps, max_steps*max_steps_decay)
@@ -395,7 +396,7 @@ def dqn_train(players_number, agents, scoring_function, reward_coeff_dict, num_e
             # Progress Bar
             progress_bar(episode, agents, num_episodes, start, stats)
             
-            early_stop = updateBestNetwork(agents, players_number, scoring_function, reward_coeff_dict, max_steps, stats, save_folder)
+            early_stop = update_best_network(agents, players_number, scoring_function, reward_coeff_dict, max_steps, stats, save_folder)
             if(early_stop):
                 break
     
@@ -413,7 +414,7 @@ def dqn_train(players_number, agents, scoring_function, reward_coeff_dict, num_e
         
         runTests(players_number=players_number, agents=agents, scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict, 
                  max_steps=max_steps)
-    return
+        
 
 
 

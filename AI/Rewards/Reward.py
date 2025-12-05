@@ -37,7 +37,7 @@ def computeReward(coeff_dict, player, action, ball, left_goal_position, right_go
     
     
     # Distance of ball to opponent goal
-    delta_ball_goal_reward = get_delta_ball_goal_reward(body, shape, ball_body, right_goal_position, left_goal_position, delta_ball_goal_coeff)
+    delta_ball_goal_reward = get_delta_ball_goal_reward(shape, ball_body, right_goal_position, left_goal_position, delta_ball_goal_coeff)
         
     can_shoot_reward = get_shooting_reward(action, body, can_shoot_coeff)
     
@@ -123,7 +123,7 @@ def get_delta_ball_player_reward(delta_ball_player_coeff, body, ball_body, alpha
         
     return delta_ball_player_reward
 
-def get_delta_ball_goal_reward(body, shape, ball_body, right_goal_position, left_goal_position, delta_ball_goal_coeff):
+def get_delta_ball_goal_reward(shape, ball_body, right_goal_position, left_goal_position, delta_ball_goal_coeff):
     demi_goal_len = math.floor(Settings.GOAL_LEN/2)
     shooting_speed = Settings.SHOOTING_SPEED
     delta_time = Settings.DELTA_TIME
