@@ -65,7 +65,7 @@ if(__name__ == "__main__"):
     epsilon = 0.8
     epsilon_min = 0.05
 
-    num_episodes = 10_000
+    num_episodes = 20_000
     wait_rate = 0
     exploration_rate = 0.5 - wait_rate # à x%, on atteint le min d'epsilon, en incluant le temps "stagnant"
     num_wait = round(num_episodes*wait_rate) # number of episodes to wait until epsilon decays
@@ -88,9 +88,9 @@ if(__name__ == "__main__"):
     reward_coeff_dict = {
         "static_reward": -0.002,
         "delta_ball_player_coeff": 0.01,
-        "delta_ball_goal_coeff": 0.02,
+        "delta_ball_goal_coeff": 0.03,
         "can_shoot_coeff": 0.1,
-        "goal_coeff": 5,
+        "goal_coeff": 1,
         "wrong_goal_coeff": -1
         }
 
@@ -105,7 +105,7 @@ if(__name__ == "__main__"):
 
     agents[0].random = False
     # agents[0].load("C:/.Ingé/Projet-Sport-Co-Networks/score=0.23")
-    debugGame(players_number, agents, scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict, human=True)
+    #debugGame(players_number, agents, scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict, human=True)
     
     
     save_folder = "C:/.ingé/Projet-Sport-Co-Networks/"
@@ -136,11 +136,11 @@ if(__name__ == "__main__"):
     
     save_training_parameters(save_folder + "training_parameters.csv", **kwargs)
     
-    """
+    
     dqn_train(players_number, agents, scoring_function, reward_coeff_dict, num_episodes, save_folder, 
           wait_rate=wait_rate, exploration_rate=exploration_rate, 
           starting_max_steps=starting_max_steps, ending_max_steps=ending_max_steps, 
-          display=display, simulation_speed=simulation_speed, moyenne_ratio=0.05)"""
+          display=display, simulation_speed=simulation_speed, moyenne_ratio=0.05)
     
     """
     config_file = "C:/.ingé/EI2/Projet-Sport-Co/AI/Algorithms/config_feed-forward_neat.cfg"
@@ -152,7 +152,12 @@ if(__name__ == "__main__"):
     import pstats
     
     prof = cProfile.Profile()
-    prof.run("train(players_number, agents, num_episodes, save_folder, wait_rate=wait_rate, exploration_rate=exploration_rate, starting_max_steps=starting_max_steps, ending_max_steps=ending_max_steps, display=display, simulation_speed=simulation_speed, moyenne_ratio=0.05, end_test=False)")
+    prof.enable()
+    dqn_train(players_number, agents, scoring_function, reward_coeff_dict, num_episodes, save_folder, 
+          wait_rate=wait_rate, exploration_rate=exploration_rate, 
+          starting_max_steps=starting_max_steps, ending_max_steps=ending_max_steps, 
+          display=display, simulation_speed=simulation_speed, moyenne_ratio=0.05)
+    prof.disable()
     prof.dump_stats('output.prof')
     
     with open(save_folder + 'profiled.txt', 'w') as stream:
