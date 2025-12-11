@@ -26,7 +26,7 @@ from Engine.Environment import LearningEnvironment
 class DQNAgent:
     def __init__(self, dimensions, batch_size, lr, sync_rate, buffer_size, epsilon_decay, linear_decay=True, 
                  epsilon=1.0, epsilon_min=0.05, gamma=0.99, betas=(0.9, 0.999), eps=1e-8, soft_update=True, tau=5e-3,
-                 random=False, cuda=False):
+                 random=False, cuda=False, model_improvement=None):
         self.batch_size = batch_size
         self.action_dim = dimensions[-1]
         self.lr = lr
@@ -36,6 +36,7 @@ class DQNAgent:
         self.linear_decay = linear_decay
         self.epsilon_min = epsilon_min
         self.random = random
+        self.model_improvement = model_improvement
 
         self.device = torch.device("cuda" if (cuda and torch.cuda.is_available()) else "cpu")
 
@@ -112,8 +113,13 @@ class DQNAgent:
         # Q-learning target
         predicted_q = self.onlineNetwork(states).gather(1, actions)
         with torch.no_grad():
-            next_q_values = self.targetNetwork(next_states).max(dim=1, keepdim=True)[0]
-            target_q = rewards + self.gamma * (1 - dones) * next_q_values
+            if self.model_improvement == "DoubleDQN":
+                next_actions = self.onlineNetwork(next_states).argmax(dim=1, keepdim=True)
+                next_q_values = self.targetNetwork(next_states).gather(1, next_actions)
+                target_q = rewards + self.gamma * (1 - dones) * next_q_values
+            else: # Vanilla DQN
+                next_q_values = self.targetNetwork(next_states).max(dim=1, keepdim=True)[0]
+                target_q = rewards + self.gamma * (1 - dones) * next_q_values
 
         td_errors = predicted_q - target_q
         loss = (weights * td_errors.pow(2)).mean()
@@ -165,12 +171,12 @@ class DQNAgent:
 
 def getRandomDQNAgents(n, dimensions, batch_size=128, lr=3e-4, sync_rate=1000, buffer_size=50_000, 
                        epsilon_decay=0.99995, linear_decay=True, epsilon=1.0, epsilon_min=0.05, gamma=0.99, soft_update=True, tau=5e-3, 
-                       betas=(0.9, 0.999), eps=1e-8, cuda=False):
+                       betas=(0.9, 0.999), eps=1e-8, cuda=False, model_improvement=None):
     agents = []
     for i in range(n):
         agents.append(DQNAgent(dimensions=dimensions, batch_size=batch_size, lr=lr, sync_rate=sync_rate, buffer_size=buffer_size, 
                                epsilon_decay=epsilon_decay, linear_decay=linear_decay, epsilon=epsilon, epsilon_min=epsilon_min, gamma=gamma, soft_update=soft_update, tau=tau, 
-                               betas=betas, eps=eps, random=True, cuda=cuda))
+                               betas=betas, eps=eps, random=True, cuda=cuda, model_improvement=model_improvement))
     return agents
 
 
