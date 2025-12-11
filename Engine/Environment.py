@@ -54,6 +54,12 @@ class LearningEnvironment():
         for _ in range(Settings.DELTA_TIME):
             space.step(0.001)
 
+<<<<<<< HEAD
+=======
+        self._checkIfDone()
+        rewards = [self.getReward(player_id, debug) for player_id in range(self.n_players)]
+        
+>>>>>>> bfc629b (DDQN)
         reset_movements(self.players)
         checkPlayersCanShoot(self.players, self.ball)
         
