@@ -321,7 +321,7 @@ def train_PPO_model(
         loss_hist["entropy"] += loss["entropy"]
 
         model.init_memory()
-        print(score_history_1, score_history_2)
+        
         if i_episode%interval_notify == 0:
             print(num_game)
             print(f"[{int(time.time()-start)}s] Episode {i_episode} | ", end="")
