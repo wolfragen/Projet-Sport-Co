@@ -114,7 +114,7 @@ def rayTracing(space, player: tuple[pymunk.Body, pymunk.Shape]) -> tuple[np.ndar
     vision_array = np.zeros(number_of_rays * 8, dtype=np.float32)
 
     # Vectorized assignment for one-hot encoding
-    indices = np.where(types > 0)[0]
+    indices = np.nonzero(types > 2) # TODO: à vérifier
     for i in indices:
         vision_array[8*i+1 + types[i]] = 1.0
 
