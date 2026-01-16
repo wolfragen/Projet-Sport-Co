@@ -40,7 +40,7 @@ def plot_training_csv(main_path, csv_name):
     plt.close()
     return
 
-plot_training_csv("C:/.ingé/Projet-Sport-Co-Networks/", "training_data.csv")
+plot_training_csv("C:/.ingé/Projet-Sport-Co-Networks/fail=0.02/", "training_data.csv")
 
 
 

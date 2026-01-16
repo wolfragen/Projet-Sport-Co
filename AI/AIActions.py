@@ -33,25 +33,61 @@ def play(player, ball, action) -> np.array:
     speed = Settings.PLAYER_SPEED
     rotation_speed = Settings.PLAYER_ROT_SPEED
     
+    if(type(action) != int):
+        if(action[2] > 0.1):
+            Actions.shoot(player,ball, power=action[2])
+        Actions.move(player, speed=action[0]*speed, rotation_speed=action[1]*rotation_speed)
+        return
+    
     if action == 0:
         # Move forward
-        Actions.move(player, speed=speed)  # TODO variable speed?
-        
-    if action == 1:
+        Actions.move(player, speed=speed)
+    elif action == 1:
         # Rotate left
-        Actions.move(player, rotation_speed=-rotation_speed)  # TODO variable speed?
-        
-    if action == 2:
+        Actions.move(player, rotation_speed=-rotation_speed)
+    elif action == 2:
         # Rotate right
-        Actions.move(player, rotation_speed=rotation_speed)  # TODO variable speed?
+        Actions.move(player, rotation_speed=rotation_speed)
         
-    if action == 3:
+    elif action == 3:
+        Actions.shoot(player,ball)
+        
+        """
+    elif action == 3:
+        # Move forward
+        Actions.move(player, speed=speed*0.6)
+    elif action == 4:
+        # Rotate left
+        Actions.move(player, rotation_speed=-rotation_speed*0.6)
+    elif action == 5:
+        # Rotate right
+        Actions.move(player, rotation_speed=rotation_speed*0.6)
+        
+    elif action == 6:
+        # Move forward
+        Actions.move(player, speed=speed*0.3)
+    elif action == 7:
+        # Rotate left
+        Actions.move(player, rotation_speed=-rotation_speed*0.3)
+    elif action == 8:
+        # Rotate right
+        Actions.move(player, rotation_speed=rotation_speed*0.3)
+        
+    elif action == 9:
         # Shoot
-        Actions.shoot(player, ball)
+        Actions.shoot(player, ball, power=1.0)
+    elif action == 10:
+        # Shoot
+        Actions.shoot(player, ball, power=0.6)
+    elif action == 11:
+        # Shoot
+        Actions.shoot(player, ball, power=0.3)"""
         
+        
+        """
     if action == 4:
         # Move backward
-        Actions.move(player, speed=-speed) # TODO variable speed?
+        Actions.move(player, speed=-speed)"""
     
     return
 

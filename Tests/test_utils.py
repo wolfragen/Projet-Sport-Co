@@ -5,79 +5,117 @@ Created on Fri Oct 24 18:00:06 2025
 @author: quent
 """
 
+import numpy as np
 import pymunk
-import Settings
-from Engine.Utils import checkIfGoal, checkPlayersOut
 
-def test_checkIfGoal_scoring_behavior():
-    """
-    Test checkIfGoal for different ball positions and scoring outcomes.
-    """
+import Engine.Utils as Utils
 
-    # --- 1. Mock settings ---
-    Settings.DIM_X = 100
-    Settings.SCREEN_OFFSET = 10
+# -------------------------------------------------------------------
+# Mock Settings
+# -------------------------------------------------------------------
+class MockSettings:
+    GROUND_FRICTION = 0.9
+    DIM_X = 100
+    SCREEN_OFFSET = 5
+    PLAYER_SHOOTING_RANGE = 10
 
-    # --- 2. Ball in play, no goal ---
-    ball_body = pymunk.Body(1,1)
-    ball_body.position = (50, 0)
-    ball_shape = pymunk.Circle(ball_body, radius=5)
-    game = {"ball": (ball_body, ball_shape), "score": [0,0]}
+# -------------------------------------------------------------------
+# Mock des objets pymunk
+# -------------------------------------------------------------------
+class MockBody:
+    def __init__(self, position=(0,0)):
+        self.position = np.array(position, dtype=float)
+        self.previous_position = np.array(position, dtype=float)
+        self.canShoot = True
 
-    scored, left_team = checkIfGoal(game)
-    assert not scored
-    assert left_team is None
-    assert game["score"] == [0,0]
+class MockShape:
+    pass
 
-    # --- 3. Ball left goal ---
-    ball_body.position = (5, 0)
-    scored, left_team = checkIfGoal(game)
-    assert scored
-    assert left_team is False
-    assert game["score"] == [0,1]
+# -------------------------------------------------------------------
+# Tests createSpace
+# -------------------------------------------------------------------
+def test_createSpace(monkeypatch):
+    monkeypatch.setattr(Utils, "Settings", MockSettings)
+    space = Utils.createSpace()
+    assert isinstance(space, pymunk.Space)
+    assert space.damping == MockSettings.GROUND_FRICTION
 
-    # --- 4. Ball right goal ---
-    ball_body.position = (Settings.DIM_X + Settings.SCREEN_OFFSET + 1, 0)
-    scored, left_team = checkIfGoal(game)
-    assert scored
-    assert left_team is True
-    assert game["score"] == [1,1]
+# -------------------------------------------------------------------
+# Tests checkIfGoal
+# -------------------------------------------------------------------
+def test_checkIfGoal_left(monkeypatch):
+    monkeypatch.setattr(Utils, "Settings", MockSettings)
+    ball = (MockBody(position=(-1,0)), MockShape())
+    score = [0,0]
+    result = Utils.checkIfGoal(ball, score)
+    assert result == True
+    assert score == [0,1]
 
+def test_checkIfGoal_right(monkeypatch):
+    monkeypatch.setattr(Utils, "Settings", MockSettings)
+    ball = (MockBody(position=(MockSettings.DIM_X + MockSettings.SCREEN_OFFSET + 1, 0)), MockShape())
+    score = [0,0]
+    result = Utils.checkIfGoal(ball, score)
+    assert result == True
+    assert score == [1,0]
 
-def test_checkPlayersOut_clamping_behavior():
-    """
-    Test that checkPlayersOut correctly clamps players within horizontal bounds.
-    """
+def test_checkIfGoal_none(monkeypatch):
+    monkeypatch.setattr(Utils, "Settings", MockSettings)
+    ball = (MockBody(position=(50,0)), MockShape())
+    score = [0,0]
+    result = Utils.checkIfGoal(ball, score)
+    assert result == False
+    assert score == [0,0]
 
-    Settings.DIM_X = 100
-    Settings.SCREEN_OFFSET = 10
+# -------------------------------------------------------------------
+# Tests checkPlayersOut
+# -------------------------------------------------------------------
+def test_checkPlayersOut(monkeypatch):
+    monkeypatch.setattr(Utils, "Settings", MockSettings)
+    players = [
+        (MockBody(position=(-5, 10)), MockShape()),
+        (MockBody(position=(110, 20)), MockShape()),
+        (MockBody(position=(50, 30)), MockShape())
+    ]
+    Utils.checkPlayersOut(players)
+    # Clamp left
+    assert players[0][0].position[0] == MockSettings.SCREEN_OFFSET + 10
+    # Clamp right
+    assert players[1][0].position[0] == MockSettings.DIM_X + MockSettings.SCREEN_OFFSET - 10
+    # Within bounds
+    assert players[2][0].position[0] == 50
 
-    # Create 3 players: one inside bounds, one left out, one right out
-    players = []
-    p1 = pymunk.Body(1,1)
-    p1.position = (50, 0)
-    p1_shape = pymunk.Circle(p1, 5)
-    players.append((p1, p1_shape))
+# -------------------------------------------------------------------
+# Tests checkPlayersCanShoot
+# -------------------------------------------------------------------
+def test_checkPlayersCanShoot(monkeypatch):
+    monkeypatch.setattr(Utils, "Settings", MockSettings)
 
-    p2 = pymunk.Body(1,1)
-    p2.position = (5, 0)  # too far left
-    p2_shape = pymunk.Circle(p2, 5)
-    players.append((p2, p2_shape))
+    # Mock canShoot
+    def mock_canShoot(player_body, ball_body, max_distance=None):
+        if max_distance is None:
+            max_distance = MockSettings.PLAYER_SHOOTING_RANGE
+        # Renvoie True si player x < ball x
+        return player_body.position[0] < ball_body.position[0]
 
-    p3 = pymunk.Body(1,1)
-    p3.position = (Settings.DIM_X + Settings.SCREEN_OFFSET + 50, 0)  # too far right
-    p3_shape = pymunk.Circle(p3, 5)
-    players.append((p3, p3_shape))
+    monkeypatch.setattr(Utils, "canShoot", mock_canShoot)
 
-    checkPlayersOut(players)
+    ball = (MockBody(position=(10,0)), MockShape())
+    players = [
+        (MockBody(position=(5,0)), MockShape()),
+        (MockBody(position=(15,0)), MockShape())
+    ]
 
-    # Player inside bounds stays the same
-    assert p1.position[0] == 50
-    # Player clamped left
-    assert p2.position[0] == Settings.SCREEN_OFFSET + 10
-    # Player clamped right
-    assert p3.position[0] == Settings.DIM_X + Settings.SCREEN_OFFSET - 10
-
-    # Ensure previous_position updated
-    for p, _ in players:
-        assert p.previous_position == p.position
+    Utils.checkPlayersCanShoot(players, ball)
+    assert players[0][0].canShoot == True
+    assert players[1][0].canShoot == False
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    

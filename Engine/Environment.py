@@ -20,19 +20,19 @@ from AI.AIActions import play
 from Player.PlayerActions import process_events
 
 class LearningEnvironment():
-    def __init__(self, players_number: list[int,int], agents=None, training_progression=0.0,
+    def __init__(self, players_number: list[int,int], scoring_function, reward_coeff_dict, training_progression=0.0,
         display: bool = False, simulation_speed: float = 1.0, screen=None, draw_options=None, human=False):
-        assert agents is not None
         
         self.done = False
         self.human = human
-        self.agents = agents
         
         self.players_number = players_number
         self.n_players = players_number[0] + players_number[1]
         self.previous_actions = [-1 for i in range(self.n_players)]
         
         self.training_progression = training_progression
+        self.scoring_function = scoring_function
+        self.reward_coeff_dict = reward_coeff_dict
         
         self.display = display
         self.screen = screen
@@ -79,8 +79,7 @@ class LearningEnvironment():
     def getReward(self, player_id):
         player = self.players[player_id]
         action = self.previous_actions[player_id]
-        agent = self.agents[player_id]
-        return agent.scoring_function(agent.reward_coeff_dict, player, action, self.ball, self.left_goal_position, 
+        return self.scoring_function(self.reward_coeff_dict, player, action, self.ball, self.left_goal_position, 
                                        self.right_goal_position, self.score, self.training_progression)
     
     def isDone(self):
