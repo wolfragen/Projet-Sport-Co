@@ -13,5 +13,8 @@ output.prof
 # Config files
 *.cfg
 
+# Pycache files
+*.pyc
+
 # Main
 main.py

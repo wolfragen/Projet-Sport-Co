@@ -23,7 +23,7 @@ class ActorNetwork(DeepRLNetwork):
         If True, the learning rate of the network will decrease after each epoch.
     """
     def __init__(self, dimensions: list[int], device : torch.device, lr : float, lr_decay : bool):
-        super().__init__(dimensions=dimensions, last_layer=nn.Softmax(dim=-1))
+        super().__init__(dimensions=dimensions, last_layer=nn.Softmax(dim=1))
         self.device = device
         self.optimizer = torch.optim.Adam(self.net.parameters(), lr = lr, weight_decay=0)
         if lr_decay:
@@ -277,20 +277,22 @@ def train_PPO_model(
     interval_notify : int
         Number of episode until printing information about the current progress in the console"""
 
-    env = LearningEnvironment(players_number=(1,0), agents=[model],human=False)
+    env = LearningEnvironment(players_number=(1,0), 
+                              scoring_function=model.scoring_function, 
+                              reward_coeff_dict=model.reward_coeff_dict,
+                              human=False)
     print(f"Starting training for {max_duration} seconds ({num_episodes} episodes)")
     start = time.time()
-    
+    current_reward = 0
+    num_game = 0
+    score_history_1, score_history_2 = 0,0
+
     for i_episode in range(1, num_episodes + 1):
         if time.time() - start > max_duration:
             print("Reached max time for training, interrupting")
             break
-    
         state = env.getState(0)
-        current_ep_reward = 0
         loss_hist = {"clip":0, "val":0, "entropy":0}
-        num_game = 0
-        score_history_1, score_history_2 = 0,0
 
         for _ in range(model.rollout_size):
 
@@ -301,7 +303,7 @@ def train_PPO_model(
             env.playerAct(0, action)
 
             reward = env.step()[0]
-            current_ep_reward += reward
+            current_reward += reward
             done = env.isDone()
             
             model.remember(state, logprob, done, value, action, reward)
@@ -319,12 +321,17 @@ def train_PPO_model(
         loss_hist["entropy"] += loss["entropy"]
 
         model.init_memory()
-
+        print(score_history_1, score_history_2)
         if i_episode%interval_notify == 0:
+            print(num_game)
             print(f"[{int(time.time()-start)}s] Episode {i_episode} | ", end="")
-            print(f"Rewards: {current_ep_reward:.4f} | Loss_clip : {loss_hist['clip']/interval_notify} | ", end="")
+            print(f"Rewards: {current_reward/(model.rollout_size*interval_notify):.4f} | Loss_clip : {loss_hist['clip']/interval_notify} | ", end="")
             print(f"Loss_val : {loss_hist['val']/interval_notify} | Loss_entropy : {loss_hist['entropy']/interval_notify} | ", end="")
             print(f"Score: {score_history_1/num_game if num_game != 0 else 0:.2f} - {score_history_2/num_game if num_game != 0 else 0:.2f}")
+            num_game = 0
+            current_reward = 0
+            score_history_1, score_history_2 = 0,0
+            loss_hist = {"clip":0, "val":0, "entropy":0}
 
     print("Saving network...")
     model.save(save_path + "model.pt")
