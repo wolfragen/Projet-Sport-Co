@@ -131,7 +131,7 @@ def neat_train(config_file, players_number, generations, n_eval, max_steps,
             max_steps=dynamic["max_steps"]
         )
 
-        pe = ParallelEvaluator(num_workers=8, eval_function=eval_func)
+        pe = ParallelEvaluator(num_workers=16, eval_function=eval_func)
 
         # Évaluer tous les génomes (PAS une génération complète)
         return pe.evaluate(genomes, config)

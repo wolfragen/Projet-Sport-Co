@@ -132,16 +132,42 @@ def getVision(space, player: tuple[pymunk.Body, pymunk.Shape], ball, left_goal_p
     # Player, ball, and goals positions
     body, shape = player
     ball_body, _ = ball
-    
-    # Normalize positions by the field dimensions
     dim_x = Settings.DIM_X
     dim_y = Settings.DIM_Y
-    vision_array[0] = math.sin(body.angle)
-    vision_array[1] = math.cos(body.angle)
-    vision_array[2:4] = (ball_body.position[0] - body.position[0]) / dim_x, (ball_body.position[1] - body.position[1]) / dim_y
-    vision_array[4:6] = (left_goal_position[0] - body.position[0]) / dim_x, (left_goal_position[1] - body.position[1]) / dim_y
-    vision_array[6:8] = (right_goal_position[0] - body.position[0]) / dim_x, (right_goal_position[1] - body.position[1]) / dim_y
-    vision_array[8] = int(body.canShoot)
+    
+    # Normalize positions by the field dimensions
+    dx_ball = (ball_body.position[0] - body.position[0]) / dim_x
+    dy_ball = (ball_body.position[1] - body.position[1]) / dim_y
+    
+    dx_left_goal  = (left_goal_position[0]  - body.position[0]) / dim_x
+    dy_left_goal  = (left_goal_position[1]  - body.position[1]) / dim_y
+    dx_right_goal = (right_goal_position[0] - body.position[0]) / dim_x
+    dy_right_goal = (right_goal_position[1] - body.position[1]) / dim_y
+    
+    if shape.left_team:
+        sin_a = math.sin(body.angle)
+        cos_a = math.cos(body.angle)
+    
+        own_dx, own_dy = dx_left_goal, dy_left_goal
+        opp_dx, opp_dy = dx_right_goal, dy_right_goal
+        ball_dx, ball_dy = dx_ball, dy_ball
+        
+    else:
+        sin_a = math.sin(body.angle + math.pi)
+        cos_a = math.cos(body.angle + math.pi)
+    
+        own_dx, own_dy = -dx_right_goal, -dy_right_goal
+        opp_dx, opp_dy = -dx_left_goal,  -dy_left_goal
+        ball_dx, ball_dy = -dx_ball, -dy_ball
+    
+    vision_array[0] = sin_a
+    vision_array[1] = cos_a
+    vision_array[2:4] = (ball_dx, ball_dy)
+    vision_array[4:6] = (own_dx, own_dy)
+    vision_array[6:8] = (opp_dx, opp_dy)
+    
+    if Settings.ENTRY_NEURONS == 9: # TODO à changer
+        vision_array[8] = int(body.canShoot)
 
     """ # TODO: remettre si on remet le ray Tracing
     # Normalize ray distances and copy one-hot info

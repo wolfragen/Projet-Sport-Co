@@ -108,7 +108,7 @@ if(__name__ == "__main__"):
     # debugGame(players_number, agents, scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict, human=False)"""
     
     
-    save_folder = "C:/.ingé/Projet-Sport-Co-Networks/"
+    save_folder = Settings.SAVE_FOLDER
     
     kwargs = dict(
         players_number=players_number,
@@ -142,7 +142,7 @@ if(__name__ == "__main__"):
           starting_max_steps=starting_max_steps, ending_max_steps=ending_max_steps, 
           display=display, simulation_speed=simulation_speed, moyenne_ratio=0.05)"""
     
-    config_file = "C:/.ingé/EI2/Projet-Sport-Co/AI/Algorithms/config_feed-forward_neat.cfg"
+    config_file = "C:/.ingé/Projet-Sport-Co/AI/Algorithms/config_feed-forward_neat.cfg"
     neat_train(config_file=config_file, players_number=players_number, generations=100, n_eval=20, max_steps=250,
                    scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict)
     
@@ -169,8 +169,15 @@ if(__name__ == "__main__"):
                            
 
 
-
-
+"""
+#TODO : 
+    - symmetrical view (currently doing)
+    - symmetrical reward
+    - PPO
+    - curriculum
+    - 0-sum reward
+    - 1V1
+"""  
 
 
 
