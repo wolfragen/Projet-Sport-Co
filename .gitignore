@@ -1,0 +1,20 @@
+# Ignore trained networks / models
+Networks/
+
+# Local settings
+Settings.py
+
+# Serialized objects (neat-config here)
+*.pkl
+
+# Profiling output
+output.prof
+
+# Config files
+*.cfg
+
+# Pycache files
+*.pyc
+
+# Main
+main.py
