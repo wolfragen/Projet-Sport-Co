@@ -73,7 +73,7 @@ if(__name__ == "__main__"):
 
     n_players = players_number[0] + players_number[1]
     
-    """
+    
     agents = getRandomDQNAgents(n=n_players, dimensions=dimensions, batch_size=batch_size, lr=lr, sync_rate=sync_rate, buffer_size=buffer_size, 
                            epsilon_decay=epsilon_decay, linear_decay=True, epsilon=epsilon, epsilon_min=epsilon_min, gamma=gamma, 
                            soft_update=soft_update, tau=tau, cuda=cuda)
@@ -81,7 +81,7 @@ if(__name__ == "__main__"):
     Settings.GOAL_LEN = 499
     Settings.ENTRY_NEURONS = 8
     agents[0].load("C:/.ingé/Projet-Sport-Co-Networks/fail=0.008/0_best")
-    debugGame(players_number, agents, scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict, human=False)"""
+    debugGame(players_number, agents, scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict, human=False)
     
     
     """
