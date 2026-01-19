@@ -33,13 +33,17 @@ class ActorNetwork(DeepRLNetwork):
         else:
             self.lr_decay_scheduler = None
 
-    def act(self, state, log_prob_only=False):
-        probs = self.net(torch.tensor(state).unsqueeze(0)).flatten(0)
-        distribution = torch.distributions.Categorical(probs)
-        action = distribution.sample().item()
+    def act(self, state, log_prob_only=False, train=True):
+        state_t = torch.as_tensor(state, dtype=torch.float32, device=self.device).unsqueeze(0)
+        probs = self.net(state_t)
+        dist = torch.distributions.Categorical(probs)
+        action = dist.sample()
+        if not train:
+            return action.item()
+        logprob = dist.log_prob(action)
         if log_prob_only:
-            return torch.log(probs[action])
-        return action, torch.log(probs[action])
+            return logprob.item()
+        return action.item(), logprob.item()
     
 class CriticNetwork(DeepRLNetwork):
     """
@@ -171,87 +175,86 @@ class PPOAgent:
         
         return action_logprobs, state_values, dist_entropy
         
-    def compute_gae(self):
+    def compute_gae(self, last_value: float, last_done: bool):
         """Compute Generalized Advantage Estimation"""
         rewards = self.memory["rewards"]
-        values = self.memory["vals"]
-        dones = self.memory["dones"]
-
+        values  = self.memory["vals"]
+        dones   = self.memory["dones"]
+    
         advantages = []
         returns = []
-
-        gae = 0
-        next_value = 0
-
+    
+        gae = 0.0
+        next_value = 0.0 if last_done else float(last_value)
+    
         for i in reversed(range(len(rewards))):
-            mask = 1.0 - float(dones[i])
+            mask = 1.0 - float(dones[i])  # 0 if terminal else 1
             delta = rewards[i] + self.gamma * next_value * mask - values[i]
             gae = delta + self.gamma * self.lmbda * mask * gae
-
+    
             advantages.insert(0, gae)
             returns.insert(0, gae + values[i])
-
+    
             next_value = values[i]
-
-        advantages = torch.tensor(advantages, dtype=torch.float32, device=self.device)
-        returns = torch.tensor(returns, dtype=torch.float32, device=self.device)
-
+    
+        advantages = torch.as_tensor(advantages, dtype=torch.float32, device=self.device)
+        returns    = torch.as_tensor(returns, dtype=torch.float32, device=self.device)
+    
         if self.normalize_advantage:
             advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
-
+    
         return advantages, returns
 
 
-    def replay(self):
-        """ Update the policy using data in memory """
-        with torch.no_grad():
-            old_states = torch.tensor(np.array(self.memory["states"]), dtype=torch.float32, device = self.device)
-            old_actions = torch.tensor(np.array(self.memory["actions"]), dtype=torch.float32, device = self.device)
-            old_logprobs = torch.tensor(np.array(self.memory["log_probs"]), dtype=torch.float32, device = self.device)
-        
-        advantages, returns = self.compute_gae()
-
-        loss_hist = {"clip":0, "val":0, "entropy":0}
-
+    def replay(self, last_value: float, last_done: bool):
+        """Update the policy using data in memory."""
+        old_states = torch.as_tensor(np.array(self.memory["states"]), dtype=torch.float32, device=self.device)
+        old_actions = torch.as_tensor(self.memory["actions"], dtype=torch.long, device=self.device)
+        old_logprobs = torch.as_tensor(self.memory["log_probs"], dtype=torch.float32, device=self.device)
+    
+        advantages, returns = self.compute_gae(last_value=last_value, last_done=last_done)
+    
+        loss_hist = {"clip": 0.0, "val": 0.0, "entropy": 0.0}
+    
         for _ in range(self.n_epoch):
-
             logprobs, state_values, dist_entropy = self.evaluate(old_states, old_actions)
-            state_values = torch.squeeze(state_values)
-
-            # Compute ClipPPOLoss
+            state_values = state_values.squeeze(-1)
+    
             ratios = torch.exp(logprobs - old_logprobs)
+    
             loss1 = ratios * advantages
             loss2 = torch.clamp(ratios, 1 - self.clip_eps, 1 + self.clip_eps) * advantages
-            
             loss_clip = -torch.min(loss1, loss2)
+    
             loss_val = self.critic_loss_coeff * nn.functional.mse_loss(state_values, returns)
-            loss_entropy = - self.entropy_loss_coeff * dist_entropy
-
-            loss =  (loss_clip + loss_val + loss_entropy).mean()
-
-            # Backpropagation
+            loss_entropy = -self.entropy_loss_coeff * dist_entropy
+    
+            loss = (loss_clip + loss_val + loss_entropy).mean()
+    
             self.actor.optimizer.zero_grad()
             self.critic.optimizer.zero_grad()
             loss.backward()
-
-            # Gradient clipping
+    
             if self.max_grad_norm > 0:
                 torch.nn.utils.clip_grad_norm_(self.actor.parameters(), self.max_grad_norm)
                 torch.nn.utils.clip_grad_norm_(self.critic.parameters(), self.max_grad_norm)
-
+    
             self.critic.optimizer.step()
             self.actor.optimizer.step()
-
-            # Decay of the learning rate
+    
             if self.lr_decay:
                 self.actor.lr_decay_scheduler.step()
                 self.critic.lr_decay_scheduler.step()
-            
+    
             loss_hist["clip"] += loss_clip.detach().mean().item()
             loss_hist["val"] += loss_val.detach().mean().item()
             loss_hist["entropy"] += loss_entropy.detach().mean().item()
-
-        return {key:loss_hist[key]/self.n_epoch for key in loss_hist}
+    
+        return {k: v / self.n_epoch for k, v in loss_hist.items()}
+    
+    def act(self, state, train=False):
+        # NOT FOR TRAINING
+        return self.actor.act(state, train=False)
     
     def save(self, path):
         torch.save(self.actor.state_dict(), path)
@@ -289,6 +292,9 @@ def train_PPO_model(
     current_reward = 0
     num_game = 0
     score_history_1, score_history_2 = 0,0
+    
+    done = False
+    state = env.getState(0)
 
     for i_episode in range(1, num_episodes + 1):
         if time.time() - start > max_duration:
@@ -297,10 +303,11 @@ def train_PPO_model(
         loss_hist = {"clip":0, "val":0, "entropy":0}
 
         for _ in range(model.rollout_size):
-            state = env.getState(0)
+            state_t = torch.as_tensor(state, dtype=torch.float32, device=model.device).unsqueeze(0)
+
             with torch.no_grad():
                 action, logprob = model.actor.act(state)
-                value = model.critic(torch.tensor(state).unsqueeze(0)).item()
+                value = model.critic.net(state_t).squeeze(-1).item()
            
             env.playerAct(0, action)
 
@@ -316,7 +323,16 @@ def train_PPO_model(
                 num_game += 1
                 env.reset()
             
-        loss = model.replay()
+            state = env.getState(0)
+                
+        with torch.no_grad():
+            if done:
+                last_value = 0.0
+            else:
+                state_t = torch.as_tensor(state, dtype=torch.float32, device=model.device).unsqueeze(0)
+                last_value = model.critic.net(state_t).squeeze(-1).item()
+            
+        loss = model.replay(last_value=last_value, last_done=done)
 
         loss_hist["clip"] += loss["clip"]
         loss_hist["val"] += loss["val"]
