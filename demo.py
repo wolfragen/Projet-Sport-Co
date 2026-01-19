@@ -70,18 +70,20 @@ if(__name__ == "__main__"):
         }
 
     cuda = False #torch.cuda.is_available()
+    save_folder = Settings.SAVE_FOLDER
 
     n_players = players_number[0] + players_number[1]
     
-    """
+    
     agents = getRandomDQNAgents(n=n_players, dimensions=dimensions, batch_size=batch_size, lr=lr, sync_rate=sync_rate, buffer_size=buffer_size, 
                            epsilon_decay=epsilon_decay, linear_decay=True, epsilon=epsilon, epsilon_min=epsilon_min, gamma=gamma, 
                            soft_update=soft_update, tau=tau, cuda=cuda)
 
     Settings.GOAL_LEN = 499
     Settings.ENTRY_NEURONS = 8
-    agents[0].load("C:/.ingé/Projet-Sport-Co-Networks/fail=0.008/0_best")
-    debugGame(players_number, agents, scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict, human=False)"""
+    agents[0].load(save_folder + "fail=0.008/0_best")
+    debugGame(players_number, agents, scoring_function=scoring_function, 
+              reward_coeff_dict=reward_coeff_dict, human=False)
     
     
     """
@@ -99,7 +101,7 @@ if(__name__ == "__main__"):
                            epsilon_decay=epsilon_decay, linear_decay=True, epsilon=epsilon, epsilon_min=epsilon_min, gamma=gamma, 
                            soft_update=soft_update, tau=tau, cuda=cuda)
     
-    agents[1].load("C:/.ingé/Projet-Sport-Co-Networks/shooting_AI/0_84_shoot")
+    agents[1].load(save_folder + "/shooting_AI/0_84_shoot")
     debugGame(players_number, agents, scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict, human=True, max_steps=10000)
     
                            
