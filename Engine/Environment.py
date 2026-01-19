@@ -56,6 +56,7 @@ class LearningEnvironment():
 
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
         self._checkIfDone()
         rewards = [self.getReward(player_id, debug) for player_id in range(self.n_players)]
@@ -68,6 +69,8 @@ class LearningEnvironment():
 =======
 >>>>>>> parent of 3cac769 (Merge remote-tracking branch 'origin/main' into Diego-branch)
 >>>>>>> a172dac (Revert "Merge remote-tracking branch 'origin/main' into Diego-branch")
+=======
+>>>>>>> bce63f1 (try debug)
         reset_movements(self.players)
         checkPlayersCanShoot(self.players, self.ball)
         
