@@ -12,25 +12,7 @@ import Settings
 from Engine.Actions import canShoot
 
 
-<<<<<<< HEAD
-def computeReward(player, action, ball, left_goal_position, right_goal_position, score, training_progression=0.0):
-    """Compute the 
-
-    Args:
-        player (_type_): _description_
-        action (_type_): _description_
-        ball (_type_): _description_
-        left_goal_position (_type_): _description_
-        right_goal_position (_type_): _description_
-        score (_type_): _description_
-        training_progression (float, optional): _description_. Defaults to 0.0.
-
-    Returns:
-        _type_: _description_
-    """
-=======
 def computeReward(coeff_dict, player, action, ball, left_goal_position, right_goal_position, score, training_progression=0.0):
->>>>>>> main
         
     body, shape = player
     ball_body, ball_shape = ball
