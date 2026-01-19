@@ -113,13 +113,12 @@ class DQNAgent:
         # Q-learning target
         predicted_q = self.onlineNetwork(states).gather(1, actions)
         with torch.no_grad():
-            if self.model_improvement == "DoubleDQN":
-                next_actions = self.onlineNetwork(next_states).argmax(dim=1, keepdim=True)
-                next_q_values = self.targetNetwork(next_states).gather(1, next_actions)
-                target_q = rewards + self.gamma * (1 - dones) * next_q_values
-            else: # Vanilla DQN
-                next_q_values = self.targetNetwork(next_states).max(dim=1, keepdim=True)[0]
-                target_q = rewards + self.gamma * (1 - dones) * next_q_values
+            # double DQN
+            next_actions = self.onlineNetwork(next_states).argmax(dim=1, keepdim=True)
+            next_q_values = self.targetNetwork(next_states).gather(1, next_actions)
+
+            #next_q_values = self.targetNetwork(next_states).max(dim=1, keepdim=True)[0] # single DQN
+            target_q = rewards + self.gamma * (1 - dones) * next_q_values
 
         td_errors = predicted_q - target_q
         loss = (weights * td_errors.pow(2)).mean()
