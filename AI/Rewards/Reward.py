@@ -87,6 +87,7 @@ def computeReward(coeff_dict, player, action, ball, left_goal_position, right_go
     if abs(delta) > (shooting_speed * delta_time / 1000) / 1000:
         delta_ball_goal_reward = delta_ball_goal_coeff * delta / (shooting_speed * delta_time / 1000) * 4
         delta_ball_goal_reward = max(-delta_ball_goal_coeff, min(delta_ball_goal_reward, delta_ball_goal_coeff))
+<<<<<<< HEAD
 
     #for DQN 
     # can_shoot_reward = 0
@@ -106,6 +107,15 @@ def computeReward(coeff_dict, player, action, ball, left_goal_position, right_go
         else:
             can_shoot_reward = -0.1 * can_shoot_coeff
 
+=======
+        
+    can_shoot_reward = 0
+    if isinstance(action, np.ndarray):
+        shoot_signal = float(action[2])
+        is_shoot = shoot_signal > 0.1
+    else:
+        is_shoot = action == 3
+>>>>>>> a172dac (Revert "Merge remote-tracking branch 'origin/main' into Diego-branch")
     
     if body.canShoot and is_shoot:
         can_shoot_reward = can_shoot_coeff

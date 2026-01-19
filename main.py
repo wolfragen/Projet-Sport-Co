@@ -57,7 +57,11 @@ if(__name__ == "__main__"):
     players_number = (1,0)
 
     dimensions = (Settings.ENTRY_NEURONS, 2**8, 2**7, 2**6, 4)
+<<<<<<< HEAD
     batch_size = 64
+=======
+    batch_size = 128
+>>>>>>> c6e5cea (Revert "Merge remote-tracking branch 'origin/main' into Diego-branch")
     lr = 1e-5
     gamma = 0.99
     buffer_size = 100_000
@@ -65,7 +69,11 @@ if(__name__ == "__main__"):
     epsilon = 0.8
     epsilon_min = 0.05
 
+<<<<<<< HEAD
     num_episodes = 10_000
+=======
+    num_episodes = 20_000
+>>>>>>> c6e5cea (Revert "Merge remote-tracking branch 'origin/main' into Diego-branch")
     wait_rate = 0
     exploration_rate = 0.5 - wait_rate # à x%, on atteint le min d'epsilon, en incluant le temps "stagnant"
     num_wait = round(num_episodes*wait_rate) # number of episodes to wait until epsilon decays
@@ -87,10 +95,17 @@ if(__name__ == "__main__"):
     scoring_function = computeReward
     reward_coeff_dict = {
         "static_reward": -0.002,
+<<<<<<< HEAD
         "delta_ball_player_coeff": 0.005,
         "delta_ball_goal_coeff": 0.02,
         "can_shoot_coeff": 0.1,
         "goal_coeff": 1,
+=======
+        "delta_ball_player_coeff": 0.01,
+        "delta_ball_goal_coeff": 0.02,
+        "can_shoot_coeff": 0.5,
+        "goal_coeff": 5,
+>>>>>>> c6e5cea (Revert "Merge remote-tracking branch 'origin/main' into Diego-branch")
         "wrong_goal_coeff": -1
         }
 
@@ -99,17 +114,25 @@ if(__name__ == "__main__"):
     n_players = players_number[0] + players_number[1]
     agents = getRandomDQNAgents(n=n_players, dimensions=dimensions, batch_size=batch_size, lr=lr, sync_rate=sync_rate, buffer_size=buffer_size, 
                            epsilon_decay=epsilon_decay, linear_decay=True, epsilon=epsilon, epsilon_min=epsilon_min, gamma=gamma, 
+<<<<<<< HEAD
                            soft_update=soft_update, tau=tau, cuda=cuda, model_improvement="DoubleDQN")
+=======
+                           soft_update=soft_update, tau=tau, cuda=cuda)
+>>>>>>> c6e5cea (Revert "Merge remote-tracking branch 'origin/main' into Diego-branch")
 
 
 
     agents[0].random = False
     # agents[0].load("C:/.Ingé/Projet-Sport-Co-Networks/score=0.23")
 <<<<<<< HEAD
+<<<<<<< HEAD
     # debugGame(players_number, agents, scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict, human=False)"""
 =======
     # debugGame(players_number, agents, scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict, human=True)
 >>>>>>> 2aec70b (DDQN)
+=======
+    # debugGame(players_number, agents, scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict, human=False)"""
+>>>>>>> c6e5cea (Revert "Merge remote-tracking branch 'origin/main' into Diego-branch")
     
     
     save_folder = "/home/diego/Projet_INFOIA/Agents"
@@ -168,10 +191,17 @@ if(__name__ == "__main__"):
     """
     
     
+<<<<<<< HEAD
     agents[0].load(save_folder + "/0")
     debugGame(players_number, agents, scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict)
     
     runTests(players_number=players_number, agents=agents, max_steps=ending_max_steps, nb_tests=10_000, scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict)
+=======
+    agents[0].load(save_folder + "/0_best")
+    debugGame(players_number, agents, scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict)
+    
+    runTests(players_number=players_number, agents=agents, max_steps=ending_max_steps, nb_tests=10_000)
+>>>>>>> c6e5cea (Revert "Merge remote-tracking branch 'origin/main' into Diego-branch")
     
                            
 

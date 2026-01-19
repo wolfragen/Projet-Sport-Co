@@ -55,11 +55,19 @@ class LearningEnvironment():
             space.step(0.001)
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
         self._checkIfDone()
         rewards = [self.getReward(player_id, debug) for player_id in range(self.n_players)]
         
 >>>>>>> bfc629b (DDQN)
+=======
+        self._checkIfDone()
+        rewards = [self.getReward(player_id, debug) for player_id in range(self.n_players)]
+        
+=======
+>>>>>>> parent of 3cac769 (Merge remote-tracking branch 'origin/main' into Diego-branch)
+>>>>>>> a172dac (Revert "Merge remote-tracking branch 'origin/main' into Diego-branch")
         reset_movements(self.players)
         checkPlayersCanShoot(self.players, self.ball)
         
