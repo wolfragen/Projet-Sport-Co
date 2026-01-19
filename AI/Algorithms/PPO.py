@@ -5,6 +5,8 @@ from torch import nn
 import time
 from AI.Network import DeepRLNetwork
 from Engine.Environment import LearningEnvironment
+from Graphics.GraphicEngine import startDisplay
+from dataclasses import dataclass
 
 class ActorNetwork(DeepRLNetwork):
     """
@@ -103,7 +105,7 @@ class PPOAgent:
     normalize_advantage : bool
         Whether to normalize the advantage. Defaults to True.
     max_grad_norm : float
-        Maximum gradient norm value for gradient clipping. Defaults to 1.0.
+        Maximum gradient norm value for gradient clipping. Defaults to 1.0. If the value is 0.0, gradient clipping is disabled.
     cuda : bool
         Whether to use cuda (if available). Defaults to False
     """
@@ -170,6 +172,7 @@ class PPOAgent:
         return action_logprobs, state_values, dist_entropy
         
     def compute_gae(self):
+        """Compute Generalized Advantage Estimation"""
         rewards = self.memory["rewards"]
         values = self.memory["vals"]
         dones = self.memory["dones"]
@@ -202,9 +205,9 @@ class PPOAgent:
     def replay(self):
         """ Update the policy using data in memory """
         with torch.no_grad():
-            old_states = torch.tensor(np.array(self.memory["states"]))
-            old_actions = torch.tensor(np.array(self.memory["actions"]))
-            old_logprobs = torch.tensor(np.array(self.memory["log_probs"]))
+            old_states = torch.tensor(np.array(self.memory["states"]), dtype=torch.float32, device = self.device)
+            old_actions = torch.tensor(np.array(self.memory["actions"]), dtype=torch.float32, device = self.device)
+            old_logprobs = torch.tensor(np.array(self.memory["log_probs"]), dtype=torch.float32, device = self.device)
         
         advantages, returns = self.compute_gae()
 
@@ -281,7 +284,7 @@ def train_PPO_model(
                               scoring_function=model.scoring_function, 
                               reward_coeff_dict=model.reward_coeff_dict,
                               human=False)
-    print(f"Starting training for {max_duration} seconds ({num_episodes} episodes)")
+    print(f"Starting training for maximum {max_duration} seconds (maximum {num_episodes} episodes)")
     start = time.time()
     current_reward = 0
     num_game = 0
@@ -291,11 +294,10 @@ def train_PPO_model(
         if time.time() - start > max_duration:
             print("Reached max time for training, interrupting")
             break
-        state = env.getState(0)
         loss_hist = {"clip":0, "val":0, "entropy":0}
 
         for _ in range(model.rollout_size):
-
+            state = env.getState(0)
             with torch.no_grad():
                 action, logprob = model.actor.act(state)
                 value = model.critic(torch.tensor(state).unsqueeze(0)).item()
@@ -322,12 +324,13 @@ def train_PPO_model(
 
         model.init_memory()
         
-        if i_episode%interval_notify == 0:
-            print(num_game)
+        if i_episode % interval_notify == 0:
+
             print(f"[{int(time.time()-start)}s] Episode {i_episode} | ", end="")
             print(f"Rewards: {current_reward/(model.rollout_size*interval_notify):.4f} | Loss_clip : {loss_hist['clip']/interval_notify} | ", end="")
             print(f"Loss_val : {loss_hist['val']/interval_notify} | Loss_entropy : {loss_hist['entropy']/interval_notify} | ", end="")
             print(f"Score: {score_history_1/num_game if num_game != 0 else 0:.2f} - {score_history_2/num_game if num_game != 0 else 0:.2f}")
+            
             num_game = 0
             current_reward = 0
             score_history_1, score_history_2 = 0,0
@@ -336,3 +339,80 @@ def train_PPO_model(
     print("Saving network...")
     model.save(save_path + "model.pt")
     print("Training finished")
+
+@dataclass(frozen=True)
+class EpisodeResult:
+    total_reward: float
+    actions: list[list[int]]
+    steps: int
+    score: tuple[int,int]
+    success: bool
+    display: bool
+
+def testingGame(players_number, agents, scoring_function, reward_coeff_dict, max_steps, training_progression):
+    n_players = players_number[0] + players_number[1]
+    
+    env = LearningEnvironment(players_number=players_number, scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict, 
+                              training_progression=training_progression, display=False, human=False)
+    step = 1
+    
+    states = [env.getState(player_id) for player_id in range(n_players)]
+    done = False
+    
+    total_reward = 0
+    actions = [[] for _ in range(n_players)]
+    
+    while(not done):
+        
+        for player_id in range(n_players):
+            agent = agents[player_id]
+            state = states[player_id]
+            with torch.no_grad():
+                action, _ = agent.act(state)
+            env.playerAct(player_id, action)
+                
+            states[player_id] = state
+            actions[player_id].append(action)
+        
+        rewards = env.step()
+        done = (env.isDone() or step>=max_steps)
+        
+        for player_id in range(n_players):
+            state = states[player_id]
+            next_state = env.getState(player_id)
+            action = actions[player_id][step-1]
+            reward = rewards[player_id]
+            
+            states[player_id] = next_state
+            total_reward += reward
+            
+        step += 1
+    return EpisodeResult(total_reward=total_reward, actions=actions, steps=step-1, score=env.score, success=env.isDone(), display=env.display)
+
+
+def runTests(players_number, agents, scoring_function, reward_coeff_dict, max_steps, training_progression=1.0, nb_tests=10_000, should_print=True):
+    
+    rewards = 0
+    steps = 0
+    nb_fail = 0
+    score_left = 0
+    score_right = 0
+    
+    for episode in range(nb_tests):
+        
+        result = testingGame(players_number=players_number, agents=agents, scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict, 
+                             max_steps=max_steps, training_progression=training_progression)
+        rewards += result.total_reward
+        steps += result.steps
+        score = result.score
+        score_left += score[0]
+        score_right += score[1]
+        
+        if(score[0] != 1):
+            nb_fail += 1
+        
+        if((episode+1)%(nb_tests/10) == 0 and should_print):
+            print(f"Tests en cours: {(episode+1)/nb_tests*100}%")
+    
+    print(f"{nb_tests} tests | Reward: {rewards/nb_tests:.2f} | Steps: {steps/nb_tests:.1f} | Score: {score_left/nb_tests:.2f} / {score_right/nb_tests:.2f} | failed: {nb_fail/nb_tests:.3f}")
+    return rewards/nb_tests, steps/nb_tests, score_left/nb_tests, score_right/nb_tests, nb_fail/nb_tests
