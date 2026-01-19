@@ -44,7 +44,7 @@ class LearningEnvironment():
             
     
     def reset(self):
-        self._initGame()
+        self._init_game()
         
     def step(self, human_events = True, debug=False):
         

@@ -18,13 +18,15 @@ class DeepRLNetwork(nn.Module):
     dimensions : List[int]
         List of integers representing the number of neurons in each layer.
     """
-    def __init__(self, dimensions: list[int], activation=nn.LeakyReLU):
+    def __init__(self, dimensions: list[int], activation=nn.LeakyReLU, last_layer = None):
         super().__init__()
         layers = []
         for i in range(len(dimensions) - 1):
             layers.append(nn.Linear(dimensions[i], dimensions[i + 1]))
             if i < len(dimensions) - 2:
                 layers.append(activation())
+        if last_layer is not None:
+            layers.append(last_layer)
         self.net = nn.Sequential(*layers)
 
         # optional: initialize weights explicitly
