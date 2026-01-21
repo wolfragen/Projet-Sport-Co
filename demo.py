@@ -65,6 +65,7 @@ if(__name__ == "__main__"):
         "delta_ball_player_coeff": 0.01,
         "delta_ball_goal_coeff": 0.02,
         "can_shoot_coeff": 0.1,
+        "has_ball_coeff": 0,
         "goal_coeff": 5,
         "wrong_goal_coeff": -1
         }
@@ -79,6 +80,7 @@ if(__name__ == "__main__"):
                            epsilon_decay=epsilon_decay, linear_decay=True, epsilon=epsilon, epsilon_min=epsilon_min, gamma=gamma, 
                            soft_update=soft_update, tau=tau, cuda=cuda)
 
+    Settings.COMPETITIVE_VISION = False
     Settings.GOAL_LEN = 499
     Settings.ENTRY_NEURONS = 8
     agents[0].load(save_folder + "fail=0.008/0_best")
