@@ -54,18 +54,17 @@ class LearningEnvironment():
         for _ in range(Settings.DELTA_TIME):
             space.step(0.001)
 
-        rewards = [self.getReward(player_id, debug) for player_id in range(self.n_players)]
+        self._checkIfDone()
         
         reset_movements(self.players)
         checkPlayersCanShoot(self.players, self.ball)
-        self._checkIfDone()
+        rewards = [self.getReward(player_id, debug) for player_id in range(self.n_players)]
+        
+        checkPlayersOut(self.players) # check for players out of bound
         
         if self.display:
             self._tickDisplay()
-            if(human_events):
-                self._processHumanEvents()
         
-        checkPlayersOut(self.players) # check for players out of bound
         return rewards
     
     def playerAct(self, player_id, action):
@@ -74,8 +73,7 @@ class LearningEnvironment():
         return play(player, self.ball, action)
         
     def getState(self, player_id):
-        player = self.players[player_id]
-        return getVision(self.space, player, self.ball, self.left_goal_position, self.right_goal_position)
+        return getVision(self.space, self.players, player_id, self.ball, self.left_goal_position, self.right_goal_position)
     
     def getReward(self, player_id, debug=False):
         player = self.players[player_id]
