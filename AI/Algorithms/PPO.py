@@ -280,6 +280,8 @@ def train_PPO_model(
     interval_notify : int
         Number of episode until printing information about the current progress in the console"""
 
+    reward_sums = {}  # cumul des rewards par type
+
     env = LearningEnvironment(players_number=(1,0), 
                               scoring_function=model.scoring_function, 
                               reward_coeff_dict=model.reward_coeff_dict,
@@ -308,8 +310,19 @@ def train_PPO_model(
            
             env.playerAct(0, action)
 
-            reward = env.step()[0]
-            current_reward += reward
+            rewards = env.step(debug=True)
+            reward = rewards[0]
+
+            reward_dict = env.last_reward_components[0]
+
+
+            # Initialisation dynamique des clés
+            if not reward_sums:
+                reward_sums = {k: 0.0 for k in reward_dict.keys()}
+
+            for k, v in reward_dict.items():
+                reward_sums[k] += v
+
             done = env.isDone()
             
             model.remember(state, logprob, done, value, action, reward)
@@ -337,10 +350,20 @@ def train_PPO_model(
 
         model.init_memory()
         if i_episode%interval_notify == 0:
+            avg_rewards = {
+                k: v / (model.rollout_size * interval_notify)
+                for k, v in reward_sums.items()
+            }
+
             print(f"[{int(time.time()-start)}s] Episode {i_episode} | ", end="")
-            print(f"Rewards: {current_reward/(model.rollout_size*interval_notify):.4f} | Loss_clip : {loss_hist['clip']/interval_notify} | ", end="")
-            print(f"Loss_val : {loss_hist['val']/interval_notify} | Loss_entropy : {loss_hist['entropy']/interval_notify} | ", end="")
+            print(" | ".join([f"{k}: {v:.4f}" for k, v in avg_rewards.items()]), end=" | ")
+            print(f"total_reward : {reward:.4f} | ", end="")
+            print(f"Loss_clip : {loss_hist['clip']/interval_notify} | ", end="")
+            print(f"Loss_val : {loss_hist['val']/interval_notify} | ", end="")
+            print(f"Loss_entropy : {loss_hist['entropy']/interval_notify} | ", end="")
             print(f"Score: {score_history_1/num_game if num_game != 0 else 0:.2f} - {score_history_2/num_game if num_game != 0 else 0:.2f}")
+
+            reward_sums = {k: 0.0 for k in reward_sums.keys()}
             num_game = 0
             current_reward = 0
             score_history_1, score_history_2 = 0,0

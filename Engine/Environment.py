@@ -37,6 +37,7 @@ class LearningEnvironment():
         self.display = display
         self.screen = screen
         self.draw_options = draw_options
+        self.last_reward_components = [{} for _ in range(self.n_players)]
         
         self._init_game()
         if(display):
@@ -80,9 +81,29 @@ class LearningEnvironment():
     def getReward(self, player_id, debug=False):
         player = self.players[player_id]
         action = self.previous_actions[player_id]
-        return self.scoring_function(self.reward_coeff_dict, player, action, self.ball, self.left_goal_position, 
-                                       self.right_goal_position, self.score, self.training_progression, debug)
-    
+
+        result = self.scoring_function(
+            self.reward_coeff_dict,
+            player,
+            action,
+            self.ball,
+            self.left_goal_position,
+            self.right_goal_position,
+            self.score,
+            self.training_progression,
+            debug
+        )
+
+        # Cas debug → reward détaillée
+        if debug:
+            total_reward, reward_components = result
+            self.last_reward_components[player_id] = reward_components
+            return total_reward
+
+        # Cas normal → reward scalaire
+        self.last_reward_components[player_id] = {}
+        return result
+
     def isDone(self):
         return self.done
     

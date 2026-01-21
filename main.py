@@ -17,7 +17,7 @@ import Settings
 from Play import humanGame, debugGame
 from AI.Algorithms.DQN import getRandomDQNAgents, dqn_train, runTests
 from AI.Algorithms.PPO import PPOAgent, train_PPO_model
-from AI.Algorithms.NEAT import neat_train
+#from AI.Algorithms.NEAT import neat_train
 from AI.Rewards.Reward import computeReward
 
 
@@ -66,7 +66,7 @@ if(__name__ == "__main__"):
     epsilon = 0.8
     epsilon_min = 0.05
 
-    num_episodes = 10_000
+    num_episodes = 1_000
     wait_rate = 0
     exploration_rate = 0.5 - wait_rate # à x%, on atteint le min d'epsilon, en incluant le temps "stagnant"
     num_wait = round(num_episodes*wait_rate) # number of episodes to wait until epsilon decays
@@ -157,25 +157,24 @@ if(__name__ == "__main__"):
         "static_reward": -0.002,
         "delta_ball_player_coeff": 0.01,
         "delta_ball_goal_coeff": 0.02,
-        "can_shoot_coeff": 0.002,
+        "can_shoot_coeff": 0.2,
         "goal_coeff": 5,
         "wrong_goal_coeff": -1
         }
     
     agent = PPOAgent(dimensions=(dimensions_actor, dimensions_critic), scoring_function=computeReward, reward_coeff_dict=reward_coeff_dict,
                      rollout_size=2048, lr_actor=1e-4, lr_critic=3e-4, n_epoch=4, lr_decay=False, 
-                     clip_eps=0.2, gamma=0.99, lmbda=0.95, critic_loss_coeff=0.5, entropy_loss_coeff=0.01, normalize_advantage=True,
+                     clip_eps=0.2, gamma=0.99, lmbda=0.95, critic_loss_coeff=0.5, entropy_loss_coeff=0.001, normalize_advantage=False,
                      max_grad_norm=1, cuda=False)
-    train_PPO_model(agent, max_duration=3600*2.5, num_episodes=10000, save_path=save_folder, interval_notify=100)
+    train_PPO_model(agent, max_duration=3600*2.5, num_episodes=5000, save_path=save_folder, interval_notify=20)
     
-    save_folder = "/home/diego/Projet_INFOIA/Agents"
-    agent.load(save_folder + "PPO/Shoot_1.0/model.pt")
+    agent.load(save_folder + "model_00033.pt")
     agents = [agent]
-    runTests(players_number=players_number, agents=agents, max_steps=10_000, nb_tests=10_000, scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict, )
+    #runTests(players_number=players_number, agents=agents, max_steps=10_000, nb_tests=10_000, scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict, )
     
-    #agents = [None, agent]
-    #players_number = (1,1)
-    #debugGame(players_number, agents, scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict, human=True, max_steps=10000)
+    #agents = [agent]
+    players_number = (1,0)
+    debugGame(players_number, agents, scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict, human=False, max_steps=10000)
     
     ##################################################################################################################################################################
     

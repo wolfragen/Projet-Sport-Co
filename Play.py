@@ -81,7 +81,7 @@ def debugGame(players_number, agents, scoring_function, reward_coeff_dict, max_s
                 elif keys[pygame.K_SPACE]:
                     temp_continue = True
         
-        rewards = env.step()
+        rewards = env.step(debug=True)
         
         print("="*100)
         print()
@@ -94,8 +94,15 @@ def debugGame(players_number, agents, scoring_function, reward_coeff_dict, max_s
             state = states[player_id]
             action = actions[player_id]
             reward = rewards[player_id]
-            print(f"{player_id=} | {state=} | {action=} | {reward=:.2f}")
+            reward_dict = env.last_reward_components[player_id]
+
+            print(f"{player_id=} | {action=} | reward_total={reward:.4f}")
+            
+            if reward_dict:
+                for k, v in reward_dict.items():
+                    print(f"    {k:<30}: {v:.4f}")
             print()
+
             
         step += 1
     
