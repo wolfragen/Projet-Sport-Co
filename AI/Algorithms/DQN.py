@@ -102,10 +102,10 @@ class DQNAgent:
 
         batch = self.memory.sample(self.batch_size)
 
-        states = batch["state"]
+        states = batch["state"].contiguous()
         actions = batch["action"].long().unsqueeze(1)
         rewards = batch["reward"].unsqueeze(1)
-        next_states = batch["next_state"]
+        next_states = batch["next_state"].contiguous()
         dones = batch["done"].unsqueeze(1)
         weights = batch.get("weights", torch.ones(self.batch_size, 1, device=self.device))
         indices = batch.get("idx", None)
@@ -114,10 +114,10 @@ class DQNAgent:
         predicted_q = self.onlineNetwork(states).gather(1, actions)
         with torch.no_grad():
             # double DQN
-            next_actions = self.onlineNetwork(next_states).argmax(dim=1, keepdim=True)
-            next_q_values = self.targetNetwork(next_states).gather(1, next_actions)
+            #next_actions = self.onlineNetwork(next_states).argmax(dim=1, keepdim=True)
+            #next_q_values = self.targetNetwork(next_states).gather(1, next_actions)
 
-            #next_q_values = self.targetNetwork(next_states).max(dim=1, keepdim=True)[0] # single DQN
+            next_q_values = self.targetNetwork(next_states).max(dim=1, keepdim=True)[0] # single DQN
             target_q = rewards + self.gamma * (1 - dones) * next_q_values
 
         td_errors = predicted_q - target_q
