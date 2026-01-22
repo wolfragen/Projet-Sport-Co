@@ -1,0 +1,9 @@
+matplotlib
+numpy
+pandas
+pygame
+pymunk
+pytest
+tensordict
+torch
+torchrl
