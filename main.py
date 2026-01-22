@@ -159,7 +159,8 @@ if(__name__ == "__main__"):
         "delta_ball_goal_coeff": 0.02,
         "can_shoot_coeff": 0.2,
         "goal_coeff": 5,
-        "wrong_goal_coeff": -1
+        "wrong_goal_coeff": -1,
+        "has_ball_coeff":0.1
         }
     
     agent = PPOAgent(dimensions=(dimensions_actor, dimensions_critic), scoring_function=computeReward, reward_coeff_dict=reward_coeff_dict,

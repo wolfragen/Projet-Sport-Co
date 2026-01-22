@@ -114,7 +114,7 @@ def rayTracing(space, player: tuple[pymunk.Body, pymunk.Shape]) -> tuple[np.ndar
     vision_array = np.zeros(number_of_rays * 8, dtype=np.float32)
 
     # Vectorized assignment for one-hot encoding
-    indices = np.where(types > 0)[0]
+    indices = np.nonzero(types > 2) # TODO: à vérifier
     for i in indices:
         vision_array[8*i+1 + types[i]] = 1.0
 
@@ -125,11 +125,12 @@ def rayTracing(space, player: tuple[pymunk.Body, pymunk.Shape]) -> tuple[np.ndar
     return vision_array
 
 
-def getVision(space, player: tuple[pymunk.Body, pymunk.Shape], ball, left_goal_position, right_goal_position) -> np.ndarray:
+def getVision(space, players: list[tuple[pymunk.Body, pymunk.Shape]], player_id, ball, left_goal_position, right_goal_position) -> np.ndarray:
 
     vision_array = np.zeros(Settings.ENTRY_NEURONS, dtype=np.float32)
 
     # Player, ball, and goals positions
+    player = players[player_id]
     body, shape = player
     ball_body, _ = ball
     dim_x = Settings.DIM_X
@@ -148,26 +149,51 @@ def getVision(space, player: tuple[pymunk.Body, pymunk.Shape], ball, left_goal_p
         sin_a = math.sin(body.angle)
         cos_a = math.cos(body.angle)
     
-        own_dx, own_dy = dx_left_goal, dy_left_goal
-        opp_dx, opp_dy = dx_right_goal, dy_right_goal
+        own_goal_dx, own_goal_dy = dx_left_goal, dy_left_goal
+        opp_goal_dx, opp_goal_dy = dx_right_goal, dy_right_goal
         ball_dx, ball_dy = dx_ball, dy_ball
         
     else:
         sin_a = math.sin(body.angle + math.pi)
         cos_a = math.cos(body.angle + math.pi)
     
-        own_dx, own_dy = -dx_right_goal, -dy_right_goal
-        opp_dx, opp_dy = -dx_left_goal,  -dy_left_goal
+        own_goal_dx, own_goal_dy = -dx_right_goal, -dy_right_goal
+        opp_goal_dx, opp_goal_dy = -dx_left_goal,  -dy_left_goal
         ball_dx, ball_dy = -dx_ball, -dy_ball
     
-    vision_array[0] = sin_a
-    vision_array[1] = cos_a
-    vision_array[2:4] = (ball_dx, ball_dy)
-    vision_array[4:6] = (own_dx, own_dy)
-    vision_array[6:8] = (opp_dx, opp_dy)
-    
-    if Settings.ENTRY_NEURONS == 9: # TODO à changer
-        vision_array[8] = int(body.canShoot)
+    if not Settings.COMPETITIVE_VISION :
+        vision_array[0] = sin_a
+        vision_array[1] = cos_a
+        vision_array[2:4] = (ball_dx, ball_dy)
+        vision_array[4:6] = (own_goal_dx, own_goal_dy)
+        vision_array[6:8] = (opp_goal_dx, opp_goal_dy)
+        
+        if Settings.ENTRY_NEURONS == 9: # TODO à changer
+            vision_array[8] = int(body.canShoot)
+            
+    else:
+        # Compétitif, vision joueur adverse également !
+        assert len(players) == 2 # TODO ajuster pour +
+        opponent = players[0]
+        if(player_id == 0):
+            opponent = players[1]
+        opp_body, opp_shape = opponent
+        
+        ball_vx_rel = (ball_body.velocity[0] - body.velocity[0]) / (Settings.SHOOTING_SPEED + Settings.PLAYER_SPEED)
+        ball_vy_rel = (ball_body.velocity[1] - body.velocity[1]) / (Settings.SHOOTING_SPEED + Settings.PLAYER_SPEED)
+        
+        dx_opp_ball = (ball_body.position[0] - opp_body.position[0]) / dim_x
+        dy_opp_ball = (ball_body.position[1] - opp_body.position[1]) / dim_y
+        dist_ball_opponent = math.sqrt(dx_opp_ball**2 + dy_opp_ball**2)
+        
+        vision_array[0] = sin_a
+        vision_array[1] = cos_a
+        vision_array[2:4] = (ball_dx, ball_dy)
+        vision_array[4:6] = (own_goal_dx, own_goal_dy)
+        vision_array[6:8] = (opp_goal_dx, opp_goal_dy)
+        vision_array[8:10] = (ball_vx_rel, ball_vy_rel)
+        vision_array[10] = dist_ball_opponent
+        
 
     """ # TODO: remettre si on remet le ray Tracing
     # Normalize ray distances and copy one-hot info
