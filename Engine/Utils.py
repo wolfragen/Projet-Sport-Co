@@ -75,6 +75,7 @@ def checkPlayersCanShoot(players, ball):
     ball_body = ball[0]
     for player in players:
         player_body = player[0]
+        player_body.hadBall = player_body.canShoot
         player_body.canShoot = canShoot(player_body, ball_body)
     return
 
