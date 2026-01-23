@@ -269,7 +269,7 @@ def train_PPO_model(
     max_duration : int,
     num_episodes: int,
     save_path : str,
-    interval_notify : int = 10,
+    interval_notify : int = 20,
     max_steps_per_game: int = 2048,
     draw_penalty = -0.5):
     """ Train a PPO model
@@ -298,6 +298,7 @@ def train_PPO_model(
     score_history_1, score_history_2 = 0,0
     
     done = False
+    done_ppo = False
     state = env.getState(0)
     step_in_game = 0
     total_steps = 0
@@ -349,7 +350,7 @@ def train_PPO_model(
                 state_t = torch.as_tensor(state, dtype=torch.float32, device=model.device).unsqueeze(0)
                 last_value = model.critic.net(state_t).squeeze(-1).item()
             
-        loss = model.replay(last_value=last_value, last_done=done)
+        loss = model.replay(last_value=last_value, last_done=done_ppo)
 
         loss_hist["clip"] += loss["clip"]
         loss_hist["val"] += loss["val"]
@@ -364,6 +365,9 @@ def train_PPO_model(
                 f"({score_history_1/num_game:.2f}) | "
                 f"Avg steps {total_steps/num_game:.1f} | "
                 f"Reward {current_reward/num_game:.4f} | "
+                f"Clip {loss_hist['clip']:4e} | "
+                f"Val {loss_hist['val']:4e} | "
+                f"Entropy {loss_hist['entropy']:4e} | "
             )
             num_game = 0
             current_reward = 0
@@ -432,7 +436,6 @@ def train_PPO_competitive(
 
     state = env.getState(0)
     step_in_game = 0
-    done = False
 
     # =========================
     # Training loop
