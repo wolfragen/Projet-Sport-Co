@@ -11,7 +11,7 @@ import pygame
 
 import Settings
 from Graphics.GraphicEngine import display, startDisplay
-from Engine.Utils import checkIfGoal, createSpace, checkPlayersOut
+from Engine.Utils import checkIfGoal, createSpace, checkPlayersOut, checkPlayersCanShoot
 from Engine.Entity.Board import buildBoard
 from Engine.Entity.Ball import buildBall
 from Engine.Entity.Player import buildPlayers
@@ -44,7 +44,7 @@ class LearningEnvironment():
             
     
     def reset(self):
-        self._initGame()
+        self._init_game()
         
     def step(self, human_events = True):
         
@@ -55,6 +55,7 @@ class LearningEnvironment():
             space.step(0.001)
 
         reset_movements(self.players)
+        checkPlayersCanShoot(self.players, self.ball)
         self._checkIfDone()
         
         if self.display:

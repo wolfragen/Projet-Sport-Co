@@ -142,11 +142,18 @@ def getVision(space, player: tuple[pymunk.Body, pymunk.Shape], ball, left_goal_p
     vision_array[4:6] = (left_goal_position[0] - body.position[0]) / dim_x, (left_goal_position[1] - body.position[1]) / dim_y
     vision_array[6:8] = (right_goal_position[0] - body.position[0]) / dim_x, (right_goal_position[1] - body.position[1]) / dim_y
 
-    # Normalize ray distances and copy one-hot info
+    if Settings.ENTRY_NEURONS >= 9:
+        vision_array[8] = float(getattr(body, "canShoot", False))
+    if Settings.ENTRY_NEURONS >= 11 and not Settings.COMPETITIVE_VISION:
+        vision_array[9] = 0.0
+        vision_array[10] = 0.0
+
+    # Normalize ray distances and copy one-hot info only if space permits
     ray_data = rayTracing(space, player)
     ray_data[::8] = ray_data[::8] / dim_x
     ray_data[1::8] = ray_data[1::8] / dim_y
-    vision_array[8:] = ray_data.flatten()
+    if ray_data.size > 0 and Settings.ENTRY_NEURONS >= 8 + ray_data.size:
+        vision_array[8:] = ray_data.flatten()
 
     return vision_array
 

@@ -1,0 +1,4 @@
+Suivi de mon travail
+
+Sur PPO, pré training solo puis 1v1 contre agent random. Il marque à 100% mais ne tire pas, mais quand même relativement robuste.
+Réduction de la taille des cages et on repart de ce modèle pour le moment.

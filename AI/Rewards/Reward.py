@@ -12,88 +12,124 @@ import Settings
 from Engine.Actions import canShoot
 
 
-def computeReward(player, action, ball, left_goal_position, right_goal_position, score, training_progression=0.0):
-        
+def computeReward(*args, **kwargs):
+    """
+    Backward-compatible reward function.
+    Accepts either:
+      computeReward(player, action, ball, left_goal_position, right_goal_position, score, training_progression=0.0)
+    or:
+      computeReward(coeff_dict, player, action, ball, left_goal_position, right_goal_position, score, training_progression=0.0)
+    """
+    if len(args) >= 7 and isinstance(args[0], dict):
+        coeff_dict = args[0]
+        player, action, ball, left_goal_position, right_goal_position, score = args[1:7]
+        training_progression = args[7] if len(args) > 7 else kwargs.get("training_progression", 0.0)
+    else:
+        coeff_dict = {
+            "static_reward": -0.005,
+            "delta_ball_player_coeff": 0.05,
+            "delta_ball_goal_coeff": 0.1,
+            "can_shoot_coeff": 0.01,
+            "goal_coeff": 5.0,
+            "wrong_goal_coeff": -5.0,
+            "align_ball_coeff": 0.0,
+            "align_goal_coeff": 0.0,
+            "shoot_when_can_coeff": 0.0,
+            "shoot_without_ball_coeff": 0.0,
+        }
+        player, action, ball, left_goal_position, right_goal_position, score = args[:6]
+        training_progression = args[6] if len(args) > 6 else kwargs.get("training_progression", 0.0)
+
     body, shape = player
-    ball_body, ball_shape = ball
-    
-    demi_goal_len = math.floor(Settings.GOAL_LEN/2)
-    
+    ball_body, _ = ball
+
+    demi_goal_len = math.floor(Settings.GOAL_LEN / 2)
     delta_time = Settings.DELTA_TIME
     player_speed = Settings.PLAYER_SPEED
     shooting_speed = Settings.SHOOTING_SPEED
-    
-    reward = 0.0
-        
-    alpha, beta = 1.0, 1.0  # relative weights
-    
-    static_reward = -0.005
-    delta_ball_player_coeff = 0.05
-    delta_ball_goal_coeff = 0.1
-    can_shoot_coeff = 0.01
-    goal_coeff = 5
-    
-    
-    body, shape = player
-    if(score[0] != 0 or score[1] != 0):
+
+    alpha, beta = 1.0, 1.0
+
+    static_reward = coeff_dict.get("static_reward", -0.005)
+    delta_ball_player_coeff = coeff_dict.get("delta_ball_player_coeff", 0.05)
+    delta_ball_goal_coeff = coeff_dict.get("delta_ball_goal_coeff", 0.1)
+    can_shoot_coeff = coeff_dict.get("can_shoot_coeff", 0.01)
+    goal_coeff = coeff_dict.get("goal_coeff", 5.0)
+    wrong_goal_coeff = coeff_dict.get("wrong_goal_coeff", -goal_coeff)
+    align_ball_coeff = coeff_dict.get("align_ball_coeff", 0.0)
+    align_goal_coeff = coeff_dict.get("align_goal_coeff", 0.0)
+    shoot_center_coeff = coeff_dict.get("shoot_center_coeff", 0.0)
+    shoot_when_can_coeff = coeff_dict.get("shoot_when_can_coeff", 0.0)
+    shoot_without_ball_coeff = coeff_dict.get("shoot_without_ball_coeff", 0.0)
+
+    if score[0] != 0 or score[1] != 0:
         if shape.left_team and score[0] == 1:
             return goal_coeff
-        elif (not shape.left_team) and score[1] == 1:
+        if (not shape.left_team) and score[1] == 1:
             return goal_coeff
-        else:
-            return -goal_coeff
-    
-    # Delta position of player
-    dx = (body.position[0] - body.previous_position[0])
-    dy = (body.position[1] - body.previous_position[1])
-    delta = np.sqrt(alpha * dx**2 + beta * dy**2)
-    
-    # Distance to ball
-    prev_dx = (ball_body.previous_position[0] - body.previous_position[0])
-    prev_dy = (ball_body.previous_position[1] - body.previous_position[1])
+        return wrong_goal_coeff
+
+    # Distance to ball (delta)
+    prev_dx = ball_body.previous_position[0] - body.previous_position[0]
+    prev_dy = ball_body.previous_position[1] - body.previous_position[1]
     prev_dist = np.sqrt(alpha * prev_dx**2 + beta * prev_dy**2)
-    
-    curr_dx = (ball_body.position[0] - body.position[0])
-    curr_dy = (ball_body.position[1] - body.position[1])
+
+    curr_dx = ball_body.position[0] - body.position[0]
+    curr_dy = ball_body.position[1] - body.position[1]
     curr_dist = np.sqrt(alpha * curr_dx**2 + beta * curr_dy**2)
-    
+
     delta = prev_dist - curr_dist
-    delta_ball_player_reward = 0
-    if(abs(delta) > (player_speed * delta_time/1000)/1000):
-        delta_ball_player_reward = delta_ball_player_coeff* delta / (player_speed * delta_time/1000)
+    delta_ball_player_reward = 0.0
+    if abs(delta) > (player_speed * delta_time / 1000) / 1000:
+        delta_ball_player_reward = delta_ball_player_coeff * delta / (player_speed * delta_time / 1000)
         delta_ball_player_reward = max(-delta_ball_player_coeff, min(delta_ball_player_reward, delta_ball_player_coeff))
-    
-    
-    # Distance of ball to opponent goal
+
+    # Distance of ball to opponent goal (delta)
     if shape.left_team:
         gx, gy = right_goal_position
         gy_top, gy_bottom = gy - demi_goal_len, gy + demi_goal_len
     else:
         gx, gy = left_goal_position
         gy_top, gy_bottom = gy - demi_goal_len, gy + demi_goal_len
-    
+
     prev_dist = point_to_segment_distance(
-        ball_body.previous_position[0], ball_body.previous_position[1],
-        gx, gy_top, gx, gy_bottom
+        ball_body.previous_position[0], ball_body.previous_position[1], gx, gy_top, gx, gy_bottom
     )
     curr_dist = point_to_segment_distance(
-        ball_body.position[0], ball_body.position[1],
-        gx, gy_top, gx, gy_bottom
+        ball_body.position[0], ball_body.position[1], gx, gy_top, gx, gy_bottom
     )
-    
+
     delta = prev_dist - curr_dist
-    delta_ball_goal_reward = 0
+    delta_ball_goal_reward = 0.0
     if abs(delta) > (shooting_speed * delta_time / 1000) / 1000:
         delta_ball_goal_reward = delta_ball_goal_coeff * delta / (shooting_speed * delta_time / 1000) * 4
         delta_ball_goal_reward = max(-delta_ball_goal_coeff, min(delta_ball_goal_reward, delta_ball_goal_coeff))
-        
-    can_shoot_reward = 0
-    if(canShoot(body, ball_body)):
-        can_shoot_reward = can_shoot_coeff
-    elif(action == 3):
-        can_shoot_reward = - can_shoot_coeff
-    
-    reward = (static_reward + delta_ball_goal_reward + delta_ball_player_reward + can_shoot_reward)
+
+    # Shooting and alignment shaping
+    can_shoot_now = canShoot(body, ball_body)
+    can_shoot_reward = can_shoot_coeff if can_shoot_now else 0.0
+    is_shoot = (isinstance(action, np.ndarray) and float(action[2]) > 0.1) or action == 3
+    if is_shoot:
+        can_shoot_reward += shoot_when_can_coeff if can_shoot_now else -shoot_without_ball_coeff
+
+    align_ball_reward = get_alignment_reward(body, ball_body.position, align_ball_coeff)
+    align_goal_reward = 0.0
+    if can_shoot_now:
+        align_goal_reward = get_goal_alignment_reward(body, shape, left_goal_position, right_goal_position, align_goal_coeff)
+
+    shoot_center_reward = 0.0
+    if is_shoot and can_shoot_now and shoot_center_coeff > 0.0:
+        shoot_center_reward = shoot_center_coeff * get_goal_alignment_cos(body, shape, left_goal_position, right_goal_position)
+
+    reward = (
+        static_reward
+        + delta_ball_goal_reward
+        + delta_ball_player_reward
+        + can_shoot_reward
+        + align_ball_reward
+        + align_goal_reward
+        + shoot_center_reward
+    )
 
     return reward
 
@@ -113,6 +149,38 @@ def point_to_segment_distance(px, py, x1, y1, x2, y2):
     b = c1 / c2
     bx, by = x1 + b * vx, y1 + b * vy
     return np.hypot(px - bx, py - by)
+
+
+def get_alignment_reward(body, target_pos, align_coeff):
+    if align_coeff == 0.0:
+        return 0.0
+    vec = np.array([target_pos[0] - body.position[0], target_pos[1] - body.position[1]], dtype=np.float32)
+    norm = np.linalg.norm(vec)
+    if norm < 1e-6:
+        return 0.0
+    vec /= norm
+    facing = np.array([np.cos(body.angle), np.sin(body.angle)], dtype=np.float32)
+    cos_sim = np.dot(facing, vec)
+    return align_coeff * max(0.0, float(cos_sim))
+
+
+def get_goal_alignment_reward(body, shape, left_goal_position, right_goal_position, align_coeff):
+    if align_coeff == 0.0:
+        return 0.0
+    target = right_goal_position if shape.left_team else left_goal_position
+    return get_alignment_reward(body, target, align_coeff)
+
+
+def get_goal_alignment_cos(body, shape, left_goal_position, right_goal_position):
+    target = right_goal_position if shape.left_team else left_goal_position
+    vec = np.array([target[0] - body.position[0], target[1] - body.position[1]], dtype=np.float32)
+    norm = np.linalg.norm(vec)
+    if norm < 1e-6:
+        return 0.0
+    vec /= norm
+    facing = np.array([np.cos(body.angle), np.sin(body.angle)], dtype=np.float32)
+    cos_sim = np.dot(facing, vec)
+    return max(0.0, float(cos_sim))
 
 
 

@@ -27,9 +27,21 @@ def build_ppo_agent(action_dim: int = 4, cuda: bool = False) -> PPOAgent:
         "goal_coeff": 8.0,
         "wrong_goal_coeff": -2.0,
     }
+    def scoring_fn(player, action, ball, left_goal_position, right_goal_position, score, training_progression=0.0):
+        return computeReward(
+            reward_coeff_dict,
+            player,
+            action,
+            ball,
+            left_goal_position,
+            right_goal_position,
+            score,
+            training_progression,
+        )
+
     return PPOAgent(
         dimensions=(actor_dims, critic_dims),
-        scoring_function=computeReward,
+        scoring_function=scoring_fn,
         reward_coeff_dict=reward_coeff_dict,
         rollout_size=256,
         lr_actor=3e-4,
@@ -42,7 +54,8 @@ def build_ppo_agent(action_dim: int = 4, cuda: bool = False) -> PPOAgent:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Watch a PPO agent play.")
     parser.add_argument("--model", type=str, required=True, help="Path to model.pt")
-    parser.add_argument("--opponent", choices=["random", "self"], default="random")
+    parser.add_argument("--opponent", choices=["random", "self", "human"], default="random")
+    parser.add_argument("--human-side", choices=["left", "right"], default="left")
     parser.add_argument("--episodes", type=int, default=10)
     parser.add_argument("--max-steps", type=int, default=512)
     parser.add_argument("--speed", type=float, default=2.0)
@@ -62,30 +75,51 @@ def main() -> None:
     screen, draw_options = startDisplay()
     env = LearningEnvironment(
         players_number=(1, 1),
-        scoring_function=computeReward,
-        reward_coeff_dict=agent.reward_coeff_dict,
+        scoring_function=agent.scoring_function,
         display=True,
         simulation_speed=args.speed,
         screen=screen,
         draw_options=draw_options,
-        human=False,
+        human=(args.opponent == "human"),
     )
+
+    if args.opponent == "human":
+        if args.human_side == "right":
+            env.selected_player = 1
+        else:
+            env.selected_player = 0
 
     games = 0
     step = 0
     running = True
     while running and env.display and games < args.episodes:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
+        if args.opponent == "human":
+            should_stop, action = env._processHumanEvents()
+            if should_stop:
                 running = False
                 break
 
-        action_0 = agent.act(env.getState(0), train=False)
-        action_1 = opponent.act(env.getState(1), train=False)
+            human_id = env.selected_player
+            agent_id = 1 if human_id == 0 else 0
 
-        env.playerAct(0, action_0)
-        env.playerAct(1, action_1)
-        env.step()
+            if action != -1:
+                env.playerAct(human_id, action)
+
+            action_agent = agent.act(env.getState(agent_id), train=False)
+            env.playerAct(agent_id, action_agent)
+            env.step(human_events=False)
+        else:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False
+                    break
+
+            action_0 = agent.act(env.getState(0), train=False)
+            action_1 = opponent.act(env.getState(1), train=False)
+
+            env.playerAct(0, action_0)
+            env.playerAct(1, action_1)
+            env.step()
 
         step += 1
         if env.isDone() or step >= args.max_steps:

@@ -51,7 +51,7 @@ def process_events() -> None:
         return False,3
     
     # Rotate left
-    if keys[pygame.K_a]:
+    if keys[pygame.K_q]:
         time_last_action = time.time()
         return False,1
 
@@ -66,7 +66,7 @@ def process_events() -> None:
         return False,4
     
     # Forward movement
-    if keys[pygame.K_w]:
+    if keys[pygame.K_z]:
         time_last_action = time.time()
         return False,0
         

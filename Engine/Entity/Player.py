@@ -31,6 +31,8 @@ def buildPlayers(space, players_number: list[int,int], human: bool = False):
         body.position = pos
         body.previous_position = pos
         body.angle = angle
+        body.canShoot = False
+        body.hadBall = False
 
         shape = pymunk.Poly.create_box(body, (size, size))
         shape.elasticity = Settings.PLAYER_ELASTICITY
