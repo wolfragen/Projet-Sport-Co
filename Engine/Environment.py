@@ -7,6 +7,7 @@ Created on Thu Oct 30 19:15:11 2025
 
 import numpy as np
 import pygame
+from random import randint
 
 import Settings
 from Graphics.GraphicEngine import display, startDisplay
@@ -21,7 +22,7 @@ from Player.PlayerActions import process_events
 
 class LearningEnvironment():
     def __init__(self, players_number: list[int,int], scoring_function, reward_coeff_dict, mean_steps=2000, training_progression=0.0,
-        display: bool = False, simulation_speed: float = 1.0, screen=None, draw_options=None, human=False):
+        display: bool = False, simulation_speed: float = 1.0, screen=None, draw_options=None, human=False, phantom_player = False):
         
         self.done = False
         self.human = human
@@ -38,6 +39,8 @@ class LearningEnvironment():
         self.display = display
         self.screen = screen
         self.draw_options = draw_options
+        self.phantom_player = {"position_x": randint(-Settings.DIM_X+Settings.PLAYER_LEN, Settings.DIM_X-Settings.PLAYER_LEN), 
+                               "position_y": randint(-Settings.DIM_Y+Settings.PLAYER_LEN, Settings.DIM_Y-Settings.PLAYER_LEN)} if phantom_player else None
         
         self._init_game()
         if(display):
@@ -74,7 +77,7 @@ class LearningEnvironment():
         return play(player, self.ball, action)
         
     def getState(self, player_id):
-        return getVision(self.space, self.players, player_id, self.ball, self.left_goal_position, self.right_goal_position)
+        return getVision(self.space, self.players, player_id, self.ball, self.left_goal_position, self.right_goal_position, phantom_player=self.phantom_player)
     
     def getReward(self, player_id, debug=False):
         player = self.players[player_id]
