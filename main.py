@@ -154,22 +154,22 @@ if(__name__ == "__main__"):
 
     scoring_function = computeReward
     reward_coeff_dict = {
-        "static_reward": -0.002,
+        "static_reward": -0.004,
         "delta_ball_player_coeff": 0.01,
         "delta_ball_goal_coeff": 0.02,
-        "can_shoot_coeff": 0.2,
+        "can_shoot_coeff": 0.4,
         "goal_coeff": 5,
         "wrong_goal_coeff": -1,
-        "has_ball_coeff":0.1
+        "has_ball_coeff":0
         }
     
     agent = PPOAgent(dimensions=(dimensions_actor, dimensions_critic), scoring_function=computeReward, reward_coeff_dict=reward_coeff_dict,
                      rollout_size=2048, lr_actor=1e-4, lr_critic=3e-4, n_epoch=4, lr_decay=False, 
                      clip_eps=0.2, gamma=0.99, lmbda=0.95, critic_loss_coeff=0.5, entropy_loss_coeff=0.001, normalize_advantage=False,
                      max_grad_norm=1, cuda=False)
-    train_PPO_model(agent, max_duration=3600*2.5, num_episodes=5000, save_path=save_folder, interval_notify=20)
+    #train_PPO_model(agent, max_duration=3600*2.5, num_episodes=10000, save_path=save_folder, interval_notify=100)
     
-    agent.load(save_folder + "model_00033.pt")
+    agent.load(save_folder + "model_82steps.pt")
     agents = [agent]
     #runTests(players_number=players_number, agents=agents, max_steps=10_000, nb_tests=10_000, scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict, )
     

@@ -303,6 +303,7 @@ def train_PPO_model(
     state = env.getState(0)
     step_in_game = 0
     total_steps = 0
+    avg_total_reward = 0.0
 
     for i_episode in range(1, num_episodes + 1):
         if time.time() - start > max_duration:
@@ -370,19 +371,22 @@ def train_PPO_model(
 
         model.init_memory()
         if i_episode%interval_notify == 0:
-            avg_rewards = {
-                k: v / (model.rollout_size * interval_notify)
+            avg_reward_components = {
+                k: v / max(num_game, 1)
                 for k, v in reward_sums.items()
             }
 
+
             print(f"[{int(time.time()-start)}s] Episode {i_episode} | ", end="")
-            print(" | ".join([f"{k}: {v:.4f}" for k, v in avg_rewards.items()]), end=" | ")
-            print(f"total_reward : {reward:.4f} | ", end="")
-            print(f"Loss_clip : {loss_hist['clip']/interval_notify} | ", end="")
-            print(f"Loss_val : {loss_hist['val']/interval_notify} | ", end="")
-            print(f"Loss_entropy : {loss_hist['entropy']/interval_notify} | ", end="")
+            print(" | ".join([f"{k}: {v:.4f}" for k, v in avg_reward_components.items()]), end=" | ")
+            print(f"avg_steps_per_game: {total_steps / max(num_game,1):.1f} | ", end="")
+            print(f"number_of_games: {num_game} | ", end="")
+            print(f"Loss_clip : {loss_hist['clip']} | ", end="")
+            print(f"Loss_val : {loss_hist['val']} | ", end="")
+            print(f"Loss_entropy : {loss_hist['entropy']} | ", end="")
             print(f"Score: {score_history_1/num_game if num_game != 0 else 0:.2f} - {score_history_2/num_game if num_game != 0 else 0:.2f}")
 
+            last_total_reward = avg_reward_components.get("total_reward", 0)
             reward_sums = {k: 0.0 for k in reward_sums.keys()}
             num_game = 0
             current_reward = 0
@@ -390,8 +394,14 @@ def train_PPO_model(
             score_history_1, score_history_2 = 0,0
             loss_hist = {"clip":0, "val":0, "entropy":0}
 
+            if last_total_reward >= avg_total_reward and i_episode >= num_episodes // 4:
+                avg_total_reward = last_total_reward
+                print("Saving network...")
+                model.save(save_path + "best_model.pt")
+                print("Network saved.")
+
     print("Saving network...")
-    model.save(save_path + "model.pt")
+    model.save(save_path + "last_model.pt")
     print("Training finished")
     
 
