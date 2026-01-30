@@ -27,8 +27,6 @@ from AI.Network import DeepRLNetwork
 from Graphics.GraphicEngine import startDisplay
 from Engine.Environment import LearningEnvironment
 
-#class GaussianPolicy(DeepRLNetwork)
-
 
 class Actor(nn.Module):
 
@@ -70,6 +68,19 @@ class Actor(nn.Module):
 
         mean = torch.tanh(mean)
         return action, log_prob, mean
+    
+
+    class Critic(DeepRLNetwork):
+
+        def __init__(self, dimensions: list[int], device, lr, lr_decay):
+            super().__init__(dimensions = dimensions)
+            self.device = device
+            self.lr = lr
+            self.optimizer = torch.optim.Adam(self.net.parameters(), lr = lr, weight_decay = 0)
+            if lr_decay:
+                self.lr_decay_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=self.optimizer)
+            else:
+                self.lr_decay_scheduler = None
 
 
     
