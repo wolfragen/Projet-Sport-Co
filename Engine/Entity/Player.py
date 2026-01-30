@@ -12,7 +12,7 @@ from random import random
 import Settings
 
 
-def buildPlayers(space, players_number: list[int,int], human: bool = False):
+def buildPlayers(space, players_number: list[int,int], human: bool = False, phantom_player = None):
     # Screen parameters
     offset = Settings.SCREEN_OFFSET
     dim_x = Settings.DIM_X
@@ -120,6 +120,10 @@ def buildPlayers(space, players_number: list[int,int], human: bool = False):
         for i in range(n_right):
             pos = right_positions[-i]
             right_players.append(create_square(pos.tolist(), angle=np.pi, left_team=False))
+            
+    if(phantom_player is not None):
+        pos = [phantom_player["position_x"], phantom_player["position_y"]]
+        right_players.append(create_square(pos, angle=np.pi, left_team=False))
 
     # Flatten the lists
     left_flat = [item for pair in left_players for item in pair]
