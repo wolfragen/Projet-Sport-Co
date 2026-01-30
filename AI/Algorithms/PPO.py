@@ -489,7 +489,7 @@ def train_PPO_competitive(
 
             done_env = env.isDone()
             timeout = step_in_game >= max_steps_per_game
-            rollout_timeout = rollout == model.rollout_size-1
+            rollout_timeout = (rollout == model.rollout_size-1) and not timeout
             done_ppo = done_env or timeout or rollout_timeout
 
             if timeout:
@@ -499,21 +499,22 @@ def train_PPO_competitive(
             model.remember(state, logprob, done_ppo, value, action_0, reward)
 
             if done_ppo:
-                # ---- bookkeeping
-                total_steps += step_in_game
-                total_steps_for_mean += step_in_game
-                games_played_for_mean += 1
-                games_played += 1
-
-                if env.score[0] > env.score[1]:
-                    wins += 1
-                elif env.score[0] < env.score[1]:
-                    losses += 1
-                else:
-                    draws += 1
-
-                score_0 += env.score[0]
-                score_1 += env.score[1]
+                if not rollout_timeout:
+                    # ---- bookkeeping
+                    total_steps += step_in_game
+                    total_steps_for_mean += step_in_game
+                    games_played_for_mean += 1
+                    games_played += 1
+    
+                    if env.score[0] > env.score[1]:
+                        wins += 1
+                    elif env.score[0] < env.score[1]:
+                        losses += 1
+                    else:
+                        draws += 1
+    
+                    score_0 += env.score[0]
+                    score_1 += env.score[1]
 
                 env.reset()
                 step_in_game = 0
