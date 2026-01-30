@@ -40,6 +40,7 @@ class LearningEnvironment():
         self.draw_options = draw_options
         self.last_reward_components = [{} for _ in range(self.n_players)]
         
+        self.prev_score = np.zeros(2)
         self._init_game()
         if(display):
             self._initDisplay(simulation_speed)
@@ -50,6 +51,8 @@ class LearningEnvironment():
         
     def step(self, human_events = True, debug=False):
         
+        self.prev_score = self.score.copy()
+
         define_previous_pos(self.players, self.ball)
         
         space = self.space
@@ -89,6 +92,7 @@ class LearningEnvironment():
             self.left_goal_position,
             self.right_goal_position,
             self.score,
+            self.prev_score,
             self.training_progression,
             debug
         )
@@ -165,6 +169,21 @@ class LearningEnvironment():
             self.playerAct(self.selected_player, action)
             return True, action
         return False, -1
+    
+    def reset_after_goal(self):
+        space = createSpace()
+
+        self.left_goal_position, self.right_goal_position = buildBoard(space)
+        self.ball = buildBall(space)
+        self.players, self.players_left, self.players_right, self.selected_player = \
+            buildPlayers(space, self.players_number, self.human)
+
+        self.space = space
+        define_previous_pos(self.players, self.ball)
+        checkPlayersCanShoot(self.players, self.ball)
+
+        self.done = False
+
     
     
     

@@ -358,6 +358,101 @@ def train_PPO_model(
     model.save(save_path + "last_model.pt")
     print("Training finished")
     
+def clone_opponent(source: PPOAgent) -> PPOAgent:
+    opp = copy.deepcopy(source)
+    opp.actor.eval()
+    for p in opp.actor.parameters():
+        p.requires_grad = False
+    return opp
+
+def runTests(
+    players_number,
+    agents,
+    scoring_function,
+    reward_coeff_dict,
+    max_steps,
+    training_progression,
+    nb_tests=100,
+    should_print=True,
+):
+    env = LearningEnvironment(
+        players_number=players_number,
+        scoring_function=scoring_function,
+        reward_coeff_dict=reward_coeff_dict,
+        training_progression=training_progression,
+        human=False,
+    )
+
+    wins = losses = draws = 0
+    total_steps = 0
+    score_0 = score_1 = 0
+
+    for test in range(nb_tests):
+
+        env.reset()
+        state_0 = env.getState(0)
+        state_1 = env.getState(1)
+        step_in_game = 0
+
+        while True:
+            # -------- Agent 0
+            with torch.no_grad():
+                if hasattr(agents[0], "actor"):
+                    action_0, _ = agents[0].actor.act(state_0)
+                else:
+                    action_0 = agents[0].act(state_0, train=False)
+
+            # -------- Agent 1
+            with torch.no_grad():
+                if hasattr(agents[1], "actor"):
+                    action_1, _ = agents[1].actor.act(state_1)
+                else:
+                    action_1 = agents[1].act(state_1, train=False)
+
+            env.playerAct(0, action_0)
+            env.playerAct(1, action_1)
+
+            env.step()
+            step_in_game += 1
+
+            state_0 = env.getState(0)
+            state_1 = env.getState(1)
+
+            done = env.isDone()
+            timeout = step_in_game >= max_steps
+
+            if done or timeout:
+                total_steps += step_in_game
+                score_0 += env.score[0]
+                score_1 += env.score[1]
+
+                if env.score[0] > env.score[1]:
+                    wins += 1
+                elif env.score[0] < env.score[1]:
+                    losses += 1
+                else:
+                    draws += 1
+
+                break
+
+    if should_print:
+        print(
+            f"Evaluation over {nb_tests} games | "
+            f"W/D/L: {wins}/{draws}/{losses} | "
+            f"Win rate: {wins / nb_tests:.2f} | "
+            f"Avg steps: {total_steps / nb_tests:.1f} | "
+            f"Score: {score_0 / nb_tests:.2f} - {score_1 / nb_tests:.2f}"
+        )
+
+    return {
+        "wins": wins,
+        "draws": draws,
+        "losses": losses,
+        "win_rate": wins / nb_tests,
+        "avg_steps": total_steps / nb_tests,
+        "avg_score_0": score_0 / nb_tests,
+        "avg_score_1": score_1 / nb_tests,
+    }
 
 def train_PPO_competitive(
     model: PPOAgent,
@@ -384,27 +479,6 @@ def train_PPO_competitive(
     )
 
     # -------------------------
-    # Opponent pool utilities
-    # -------------------------
-    opponent_pool = []
-
-    def clone_opponent(source: PPOAgent) -> PPOAgent:
-        opp = copy.deepcopy(source)
-        opp.actor.eval()
-        for p in opp.actor.parameters():
-            p.requires_grad = False
-        return opp
-
-    # Initial opponent (episode 0 snapshot)
-    opponent_pool.append(clone_opponent(model))
-
-    # Random agent for evaluation
-    random_agent = RandomAgent(action_dim=4)
-
-    print(f"Starting PPO self-play with opponent pool ({num_episodes} episodes)")
-    start_time = time.time()
-
-    # -------------------------
     # Training statistics
     # -------------------------
     current_reward = 0.0
@@ -412,6 +486,8 @@ def train_PPO_competitive(
     games_played = 0
     wins = losses = draws = 0
     total_steps = 0
+    reward_sums = {}  
+    num_game = 0
 
     state = env.getState(0)
     step_in_game = 0
@@ -419,6 +495,17 @@ def train_PPO_competitive(
     mean_steps.append(max_steps_per_game)
     total_steps_for_mean = 0
     games_played_for_mean = 0
+
+    opponent_pool = []
+
+    # bootstrap pool with initial snapshot
+    opponent_pool.append(clone_opponent(model))
+
+    # Random agent for evaluation
+    random_agent = RandomAgent(action_dim=4)
+
+    print(f"Starting PPO self-play with opponent pool ({num_episodes} episodes)")
+    start_time = time.time()
 
     # =========================
     # Training loop
@@ -429,16 +516,11 @@ def train_PPO_competitive(
             print("Max training time reached.")
             break
 
-        # ---- sample opponent
-        r = random.random()
-        if r < 0.1:
-            opponent = model                        # mirror, 10%
-        elif r < 0.7:
-            opponent = opponent_pool[-1]       # most recent, 60%
-        elif r < 0.9:
-            opponent = random.choice(opponent_pool) # random, 20%
+        # ---- select opponent (frozen)
+        if len(opponent_pool) == 0:
+            opponent = clone_opponent(model)
         else:
-            opponent = None                       # solo-play 10%
+            opponent = random.choice(opponent_pool[-3:])
 
         if opponent is None : 
             env = LearningEnvironment(
@@ -472,16 +554,28 @@ def train_PPO_competitive(
             env.playerAct(0, action_0)
             if opponent is not None : env.playerAct(1, action_1)
 
-            rewards = env.step()
+            rewards = env.step(debug=True)
             reward = rewards[0]
+
+            reward_dict = env.last_reward_components[0]
+
+            # Initialisation dynamique des clés
+            if not reward_sums:
+                reward_sums = {k: 0.0 for k in reward_dict.keys()}
+
+            for k, v in reward_dict.items():
+                reward_sums[k] += v
 
             current_reward += reward
             step_in_game += 1
 
-            done_env = env.isDone()
+            goal_scored = env.isDone()
             timeout = step_in_game >= max_steps_per_game
             rollout_timeout = (rollout == model.rollout_size-1) and not timeout
-            done_ppo = done_env or timeout or rollout_timeout
+            done_ppo = timeout or rollout_timeout
+            
+            if goal_scored:
+                env.reset_after_goal()
 
             if timeout:
                 reward += draw_penalty
@@ -490,25 +584,26 @@ def train_PPO_competitive(
             model.remember(state, logprob, done_ppo, value, action_0, reward)
 
             if done_ppo:
-                if not rollout_timeout:
-                    # ---- bookkeeping
+                num_game += 1
+                if timeout:
                     total_steps += step_in_game
                     total_steps_for_mean += step_in_game
                     games_played_for_mean += 1
                     games_played += 1
-    
+
                     if env.score[0] > env.score[1]:
                         wins += 1
                     elif env.score[0] < env.score[1]:
                         losses += 1
                     else:
                         draws += 1
-    
+
                     score_0 += env.score[0]
                     score_1 += env.score[1]
 
-                env.reset()
-                step_in_game = 0
+
+                    env.reset()
+                    step_in_game = 0
 
             state = env.getState(0)
 
@@ -525,34 +620,40 @@ def train_PPO_competitive(
         model.replay(last_value=last_value, last_done=done_ppo)
         model.init_memory()
 
-        mean_steps.append(total_steps_for_mean/games_played_for_mean)
+        if games_played_for_mean > 0:
+            mean_steps.append(total_steps_for_mean / games_played_for_mean)
         total_steps_for_mean = 0
         games_played_for_mean = 0
 
         # ---- save opponent snapshot
         if episode % opponent_save_interval == 0:
             opponent_pool.append(clone_opponent(model))
+
             if len(opponent_pool) > max_pool_size:
                 opponent_pool.pop(0)
+
 
         # -------------------------
         # Training diagnostics
         # -------------------------
         if episode % interval_notify == 0:
-            avg_reward = current_reward / games_played if games_played > 0 else 0
-            avg_steps = total_steps / games_played if games_played > 0 else 0
+            avg_reward_components = {
+                k: v / max(num_game, 1)
+                for k, v in reward_sums.items()
+            }
             win_rate = wins / games_played if games_played > 0 else 0
 
+            avg_reward_str = " | ".join([f"{k}: {v:.4f}" for k, v in avg_reward_components.items()])
             print(
                 f"[{int(time.time()-start_time)}s] Ep {episode} | "
                 f"Games {games_played} | "
-                f"W/D/L {wins}/{draws}/{losses} "
+                f"W/D/L {wins}/{draws}/{losses} | "
                 f"({win_rate:.2f}) | "
-                f"Avg steps {avg_steps:.1f} ({sum(mean_steps)/len(mean_steps):.1f})| "
                 f"Score {score_0/games_played:.2f}-{score_1/games_played:.2f} | "
-                f"Reward {avg_reward:.4f} | "
+                f"{avg_reward_str} | "
                 f"Pool {len(opponent_pool)}"
             )
+
 
             # reset stats
             current_reward = 0.0
@@ -560,6 +661,8 @@ def train_PPO_competitive(
             games_played = 0
             wins = losses = draws = 0
             total_steps = 0
+            num_game = 0
+            reward_sums = {k: 0.0 for k in reward_sums.keys()}
 
         # -------------------------
         # Evaluation vs random agent
@@ -574,7 +677,7 @@ def train_PPO_competitive(
                 max_steps=max_steps_per_game,
                 training_progression=1.0,
                 nb_tests=100,
-                should_print=False
+                should_print=True
             )
 
     print("Saving final model...")

@@ -15,7 +15,7 @@ def sigmoid(x):
     return 1/(1+math.exp(-x))
 
 
-def computeReward(coeff_dict, player, action, ball, left_goal_position, right_goal_position, score, mean_steps, training_progression=0.0, debug=False):
+def computeReward(coeff_dict, player, action, ball, left_goal_position, right_goal_position, score, prev_score, mean_steps, training_progression=0.0, debug=True):
         
     body, shape = player
     ball_body, ball_shape = ball
@@ -24,9 +24,10 @@ def computeReward(coeff_dict, player, action, ball, left_goal_position, right_go
         
     alpha, beta = 1.0, 1.0  # relative weights
     
-    static_reward = coeff_dict["static_reward"]
-    starting_static_reward = coeff_dict["starting_static_reward"]
-    ending_static_reward = coeff_dict["ending_static_reward"]
+    static_lead_reward = coeff_dict["static_lead_reward"]
+    static_draw_reward = coeff_dict["static_draw_reward"]
+    #starting_static_reward = coeff_dict["starting_static_reward"]
+    #ending_static_reward = coeff_dict["ending_static_reward"]
     delta_ball_player_coeff = coeff_dict["delta_ball_player_coeff"]
     delta_ball_goal_coeff = coeff_dict["delta_ball_goal_coeff"]
     can_shoot_coeff = coeff_dict["can_shoot_coeff"]
@@ -36,9 +37,14 @@ def computeReward(coeff_dict, player, action, ball, left_goal_position, right_go
     
     
     body, shape = player
-    goal_reward = get_goal_reward(score, shape, goal_coeff, wrong_goal_coeff)
-    if(static_reward == 0):
-        static_reward = get_static_reward(starting_static_reward, ending_static_reward, mean_steps)
+    goal_reward = get_goal_reward(score, prev_score, shape, goal_coeff, wrong_goal_coeff)
+    static_reward = get_score_diff_static_reward(
+        score,
+        shape,
+        lead_coeff=coeff_dict["static_lead_reward"],
+        draw_penalty=coeff_dict["static_draw_reward"] 
+    )
+
     
     # Delta position of player
     delta_ball_player_reward = get_delta_ball_player_reward(delta_ball_player_coeff, body, ball_body, alpha, beta)
@@ -82,6 +88,32 @@ def get_static_reward(starting_coeff, ending_coeff, mean_steps):
     static_reward = starting_coeff - coeff * sig
     return static_reward
 
+def get_score_diff_static_reward(
+    score,
+    shape,
+    draw_penalty=-0.002,
+    lead_coeff=0.004,
+    max_goal_diff=5
+):
+    """
+    Step-wise static reward based on current score difference.
+    """
+
+    my_score = score[0] if shape.left_team else score[1]
+    opp_score = score[1] if shape.left_team else score[0]
+
+    diff = my_score - opp_score
+
+    # Draw → slight negative to discourage stalling
+    if diff == 0:
+        return draw_penalty
+
+    # Clamp for PPO stability
+    diff = max(-max_goal_diff, min(diff, max_goal_diff))
+
+    # Smooth, bounded, symmetric
+    return lead_coeff * math.tanh(diff)
+
 def point_to_segment_distance(px, py, x1, y1, x2, y2):
     """Returns shortest distance from point (px, py) to segment (x1, y1)-(x2, y2)."""
     # Vector projection approach
@@ -99,15 +131,28 @@ def point_to_segment_distance(px, py, x1, y1, x2, y2):
     bx, by = x1 + b * vx, y1 + b * vy
     return np.hypot(px - bx, py - by)
 
-def get_goal_reward(score, shape, goal_coeff, wrong_goal_coeff):
-    if(score[0] != 0 or score[1] != 0):
-        if shape.left_team and score[0] == 1:
-            return goal_coeff
-        elif (not shape.left_team) and score[1] == 1:
-            return goal_coeff
-        else:
-            return wrong_goal_coeff
-    return 0
+def get_goal_reward(score, prev_score, shape, goal_coeff, wrong_goal_coeff):
+    """
+    Reward only when a goal is scored THIS step.
+    +goal_coeff if my team scores
+    +wrong_goal_coeff if opponent scores
+    """
+
+    my_idx = 0 if shape.left_team else 1
+    opp_idx = 1 - my_idx
+
+    # Goal scored by me
+    if score[my_idx] > prev_score[my_idx]:
+        return goal_coeff
+
+    # Goal scored by opponent
+    if score[opp_idx] > prev_score[opp_idx]:
+        return wrong_goal_coeff
+
+    return 0.0
+
+
+
 
 def get_has_ball_reward(action, body, has_ball_coeff):
     if(body.canShoot and not body.hadBall):
