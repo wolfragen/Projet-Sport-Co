@@ -39,8 +39,10 @@ class LearningEnvironment():
         self.display = display
         self.screen = screen
         self.draw_options = draw_options
-        self.phantom_player = {"position_x": randint(-Settings.DIM_X+Settings.PLAYER_LEN, Settings.DIM_X-Settings.PLAYER_LEN), 
-                               "position_y": randint(-Settings.DIM_Y+Settings.PLAYER_LEN, Settings.DIM_Y-Settings.PLAYER_LEN)} if phantom_player else None
+        self.phantom_player = None
+        if(self.n_players == 1 and Settings.COMPETITIVE_VISION): # TODO phantom_player is True...
+            self.phantom_player = {"position_x": Settings.SCREEN_OFFSET + randint(0, Settings.DIM_X-Settings.PLAYER_LEN), 
+                               "position_y": Settings.SCREEN_OFFSET + randint(0, Settings.DIM_Y-Settings.PLAYER_LEN)}
         
         self._init_game()
         if(display):
@@ -55,8 +57,9 @@ class LearningEnvironment():
         define_previous_pos(self.players, self.ball)
         
         space = self.space
-        for _ in range(Settings.DELTA_TIME):
-            space.step(0.001)
+        dt = Settings.DELTA_TIME/Settings.DELTA_SIMU
+        for _ in range(Settings.DELTA_SIMU):
+            space.step(dt/1000)
 
         self._checkIfDone()
         
@@ -98,7 +101,7 @@ class LearningEnvironment():
         
         self.left_goal_position, self.right_goal_position = buildBoard(space) # Creates static objects
         self.ball = buildBall(space) # Creates the ball
-        self.players, self.players_left, self.players_right, self.selected_player = buildPlayers(space, self.players_number, self.human) # Creates the players
+        self.players, self.players_left, self.players_right, self.selected_player = buildPlayers(space, self.players_number, self.human, self.phantom_player) # Creates the players
         self.space = space
         define_previous_pos(self.players, self.ball)
         checkPlayersCanShoot(self.players, self.ball)

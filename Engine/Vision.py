@@ -173,6 +173,8 @@ def getVision(space, players: list[tuple[pymunk.Body, pymunk.Shape]], player_id,
             
     else:
         # Compétitif, vision joueur adverse également !
+        if(Settings.COMPETITIVE_VISION and phantom_player is None and len(players) == 1):
+            print("ERREUR, il faut rajouter un joueur phantôme ou un deuxième joueur.")
         if(phantom_player is not None):
             dx_opp_ball = (ball_body.position[0] - phantom_player["position_x"]) / dim_x
             dy_opp_ball = (ball_body.position[1] - phantom_player["position_y"]) / dim_y
