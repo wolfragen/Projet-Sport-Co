@@ -456,7 +456,8 @@ def train_PPO_competitive(
                 scoring_function=model.scoring_function,
                 reward_coeff_dict=model.reward_coeff_dict,
                 mean_steps = sum(mean_steps)/len(mean_steps),
-                human=False
+                human=False,
+                phantom_player=True,
             )
         else:
             env = LearningEnvironment(
