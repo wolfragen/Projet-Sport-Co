@@ -20,7 +20,7 @@ from AI.AIActions import play
 from Player.PlayerActions import process_events
 
 class LearningEnvironment():
-    def __init__(self, players_number: list[int,int], scoring_function, reward_coeff_dict, training_progression=0.0,
+    def __init__(self, players_number: list[int,int], scoring_function, reward_coeff_dict, mean_steps=2000, training_progression=0.0,
         display: bool = False, simulation_speed: float = 1.0, screen=None, draw_options=None, human=False):
         
         self.done = False
@@ -33,6 +33,7 @@ class LearningEnvironment():
         self.training_progression = training_progression
         self.scoring_function = scoring_function
         self.reward_coeff_dict = reward_coeff_dict
+        self.mean_steps = mean_steps
         
         self.display = display
         self.screen = screen
@@ -54,18 +55,17 @@ class LearningEnvironment():
         for _ in range(Settings.DELTA_TIME):
             space.step(0.001)
 
-        rewards = [self.getReward(player_id, debug) for player_id in range(self.n_players)]
+        self._checkIfDone()
         
         reset_movements(self.players)
         checkPlayersCanShoot(self.players, self.ball)
-        self._checkIfDone()
+        rewards = [self.getReward(player_id, debug) for player_id in range(self.n_players)]
+        
+        checkPlayersOut(self.players) # check for players out of bound
         
         if self.display:
             self._tickDisplay()
-            if(human_events):
-                self._processHumanEvents()
         
-        checkPlayersOut(self.players) # check for players out of bound
         return rewards
     
     def playerAct(self, player_id, action):
@@ -74,14 +74,13 @@ class LearningEnvironment():
         return play(player, self.ball, action)
         
     def getState(self, player_id):
-        player = self.players[player_id]
-        return getVision(self.space, player, self.ball, self.left_goal_position, self.right_goal_position)
+        return getVision(self.space, self.players, player_id, self.ball, self.left_goal_position, self.right_goal_position)
     
     def getReward(self, player_id, debug=False):
         player = self.players[player_id]
         action = self.previous_actions[player_id]
         return self.scoring_function(self.reward_coeff_dict, player, action, self.ball, self.left_goal_position, 
-                                       self.right_goal_position, self.score, self.training_progression, debug)
+                                       self.right_goal_position, self.score, self.mean_steps, self.training_progression, debug)
     
     def isDone(self):
         return self.done
