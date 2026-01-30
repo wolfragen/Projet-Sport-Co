@@ -18,3 +18,7 @@ output.prof
 
 # Main
 main.py
+
+# WSL
+
+*.Identifier

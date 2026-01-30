@@ -259,10 +259,16 @@ class PPOAgent:
         # NOT FOR TRAINING
         return self.actor.act(state, train=False)
     
-    def save(self, path):
+    def save(self, path, save_all = False):
+        if save_all:
+            torch.save(self.actor.state_dict(), path[:-3] + "_actor.pt")
+            torch.save(self.actor.state_dict(), path[:-3] + "_critic.pt")
         torch.save(self.actor.state_dict(), path)
 
-    def load(self, path):
+    def load(self, path, load_all = False):
+        if load_all:
+            self.actor.load_state_dict(torch.load(path[:-3] + "_actor.pt", map_location=self.device))
+            self.critic.load_state_dict(torch.load(path[:-3] + "_critic.pt", map_location=self.device))
         self.actor.load_state_dict(torch.load(path, map_location=self.device))
 
 def train_PPO_model(
@@ -527,7 +533,7 @@ def train_PPO_competitive(
         # Training diagnostics
         # -------------------------
         if episode % interval_notify == 0:
-            avg_reward = current_reward / (model.rollout_size * interval_notify)
+            avg_reward = current_reward / (games_played) if games_played > 0 else 0
             avg_steps = total_steps / games_played if games_played > 0 else 0
             win_rate = wins / games_played if games_played > 0 else 0
 
