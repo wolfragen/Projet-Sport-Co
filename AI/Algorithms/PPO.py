@@ -379,6 +379,7 @@ def train_PPO_competitive(
     draw_penalty: float = -0.5,
     max_steps_per_game: int = 2048,
     eval_interval: int = 500,
+    save_all = False,
 ):
     """
     Train a PPO agent using competitive self-play with an opponent pool.
@@ -574,6 +575,9 @@ def train_PPO_competitive(
         # Evaluation vs random agent
         # -------------------------
         if episode % eval_interval == 0:
+            n_model = episode//eval_interval
+            print(f">>> Checkpoint reached, saving model number {n_model}...")
+            model.save(os.path.join(save_path, f"model_{n_model}.pt"), save_all=save_all)
             print(">>> Evaluating vs random agent...")
             runTests(
                 players_number=(1, 1),
@@ -587,7 +591,7 @@ def train_PPO_competitive(
             )
 
     print("Saving final model...")
-    model.save(os.path.join(save_path, "model.pt"))
+    model.save(os.path.join(save_path, "model_final.pt"),save_all=save_all)
     print("Self-play training finished.")
 
 
