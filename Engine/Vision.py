@@ -173,18 +173,20 @@ def getVision(space, players: list[tuple[pymunk.Body, pymunk.Shape]], player_id,
             
     else:
         # Compétitif, vision joueur adverse également !
-        assert len(players) == 2 # TODO ajuster pour +
-        opponent = players[0]
-        if(player_id == 0):
-            opponent = players[1]
-        opp_body, opp_shape = opponent
+        if(len(players) == 1):
+            dx_opp_ball = (ball_body.position[0] - (right_goal_position[0]+100)) / dim_x
+            dy_opp_ball = (ball_body.position[1] - right_goal_position[1]) / dim_y
+        else:
+            opponent = players[0]
+            if(player_id == 0):
+                opponent = players[1]
+            opp_body, opp_shape = opponent
+            
+            dx_opp_ball = (ball_body.position[0] - opp_body.position[0]) / dim_x
+            dy_opp_ball = (ball_body.position[1] - opp_body.position[1]) / dim_y
         
         ball_vx_rel = (ball_body.velocity[0] - body.velocity[0]) / (Settings.SHOOTING_SPEED + Settings.PLAYER_SPEED)
         ball_vy_rel = (ball_body.velocity[1] - body.velocity[1]) / (Settings.SHOOTING_SPEED + Settings.PLAYER_SPEED)
-        
-        dx_opp_ball = (ball_body.position[0] - opp_body.position[0]) / dim_x
-        dy_opp_ball = (ball_body.position[1] - opp_body.position[1]) / dim_y
-        dist_ball_opponent = math.sqrt(dx_opp_ball**2 + dy_opp_ball**2)
         
         vision_array[0] = sin_a
         vision_array[1] = cos_a
@@ -192,7 +194,7 @@ def getVision(space, players: list[tuple[pymunk.Body, pymunk.Shape]], player_id,
         vision_array[4:6] = (own_goal_dx, own_goal_dy)
         vision_array[6:8] = (opp_goal_dx, opp_goal_dy)
         vision_array[8:10] = (ball_vx_rel, ball_vy_rel)
-        vision_array[10] = dist_ball_opponent
+        vision_array[10:12] = (dx_opp_ball, dy_opp_ball)
         
 
     """ # TODO: remettre si on remet le ray Tracing
