@@ -6,6 +6,7 @@ from AI.Network import DeepRLNetwork
 from Engine.Environment import LearningEnvironment
 from AI.Algorithms.DQN import runTests
 from AI.Algorithms.RANDOM import RandomAgent
+from logger import Logger
 
 import copy
 import random
@@ -114,18 +115,28 @@ class PPOAgent:
         assert dimensions[1][-1] == 1, "Output of the critic network must be 1 dimensionnal"
         assert dimensions[0][0] == dimensions[1][0], "Actor and critic networks should have the same input size"
         
+        self.dimension_actor = dimensions[0]
+        self.dimension_critic = dimensions[1]
+
         self.n_epoch = n_epoch
         self.rollout_size = rollout_size
+
         self.gamma = gamma
         self.lmbda = lmbda
+
         self.clip_eps = clip_eps
         self.critic_loss_coeff = critic_loss_coeff
         self.entropy_loss_coeff = entropy_loss_coeff
         self.max_grad_norm = max_grad_norm
+
         self.scoring_function = scoring_function
         self.reward_coeff_dict = reward_coeff_dict
+
         self.normalize_advantage = normalize_advantage
+
         self.lr_decay = lr_decay
+        self.lr_actor = lr_actor
+        self.lr_critic = lr_critic
 
         self.device = torch.device("cuda" if (cuda and torch.cuda.is_available()) else "cpu")
         self.init_memory()
@@ -239,6 +250,24 @@ class PPOAgent:
 
     def act(self, state, train=False):
         return self.actor.act(state, train=False)
+    
+    def log_params(self, logger: Logger):
+        logger.log(text = f"dimension_actor: {self.dimension_actor}")
+        logger.log(text = f"dimension_critic: {self.dimension_critic}")
+        logger.log(text = f"reward_coeff_dict: {self.reward_coeff_dict}")
+        logger.log(text = f"rollout_size: {self.rollout_size}")
+        logger.log(text = f"lr_actor: {self.lr_actor}") 
+        logger.log(text = f"lr_critic: {self.lr_critic}") 
+        logger.log(text = f"n_epoch: {self.n_epoch}")
+        logger.log(text = f"lr_decay: {self.lr_decay}") 
+        logger.log(text = f"clip_eps: {self.clip_eps}") 
+        logger.log(text = f"gamma: {self.gamma}") 
+        logger.log(text = f"lmbda: {self.lmbda}")
+        logger.log(text = f"critic_loss_coeff: {self.critic_loss_coeff}")
+        logger.log(text = f"entropy_loss_coeff: {self.entropy_loss_coeff}")
+        logger.log(text = f"normalize_advantage: {self.normalize_advantage}")
+        logger.log(text = f"max_grad_norm: {self.max_grad_norm}")
+        logger.log(text = f"cuda: {self.device}")
     
     def save(self, path, save_all = False):
         if save_all:
@@ -380,6 +409,9 @@ def train_PPO_competitive(
     max_steps_per_game: int = 2048,
     eval_interval: int = 500,
     save_all = False,
+    save_all_models = False,
+    log = False,
+    model_name = "model",
 ):
     """
     Train a PPO agent using competitive self-play with an opponent pool.
@@ -411,7 +443,20 @@ def train_PPO_competitive(
     # Random agent for evaluation
     random_agent = RandomAgent(action_dim=4)
 
-    print(f"Starting PPO self-play with opponent pool ({num_episodes} episodes)")
+    # Logger
+    if log:
+        logger = Logger(os.path.join(save_path, f"{model_name}.txt"))
+        logger.log("Parameters:")
+        model.log_params(logger)
+        logger.log(text = f"opponent_save_interval: {opponent_save_interval}")
+        logger.log(text = f"max_pool_size: {max_pool_size}")
+        logger.log(text = f"draw_penalty: {draw_penalty}")
+        logger.log(text = f"max_steps_per_game: {max_steps_per_game}")
+        logger.log(text = "********************")
+
+    txt = f"Starting PPO self-play with opponent pool ({num_episodes} episodes)"
+    print(txt)
+    if log: logger.log(text = txt)
     start_time = time.time()
 
     # -------------------------
@@ -436,7 +481,9 @@ def train_PPO_competitive(
     for episode in range(1, num_episodes + 1):
 
         if time.time() - start_time > max_duration:
-            print("Max training time reached.")
+            txt = "Max training time reached."
+            print(txt)
+            if log: logger.log(text = txt)
             break
 
         # ---- sample opponent
@@ -554,16 +601,9 @@ def train_PPO_competitive(
             avg_steps = total_steps / games_played if games_played > 0 else 0
             win_rate = wins / games_played if games_played > 0 else 0
 
-            print(
-                f"[{int(time.time()-start_time)}s] Ep {episode} | "
-                f"Games {games_played} | "
-                f"W/D/L {wins}/{draws}/{losses} "
-                f"({win_rate:.2f}) | "
-                f"Avg steps {avg_steps:.1f} ({sum(mean_steps)/len(mean_steps):.1f})| "
-                f"Score {score_0/games_played:.2f}-{score_1/games_played:.2f} | "
-                f"Reward {avg_reward:.4f} | "
-                f"Pool {len(opponent_pool)}"
-            )
+            txt = f"""[{int(time.time()-start_time)}s] Ep {episode} | Games {games_played} | W/D/L {wins}/{draws}/{losses} ({win_rate:.2f}) | Avg steps {avg_steps:.1f} ({sum(mean_steps)/len(mean_steps):.1f})| Score {score_0/games_played:.2f}-{score_1/games_played:.2f} | Reward {avg_reward:.4f} | Pool {len(opponent_pool)}"""
+            print(txt)
+            if log: logger.log(text = txt)
 
             # reset stats
             current_reward = 0.0
@@ -576,10 +616,18 @@ def train_PPO_competitive(
         # Evaluation vs random agent
         # -------------------------
         if episode % eval_interval == 0:
-            n_model = episode//eval_interval
-            print(f">>> Checkpoint reached, saving model {n_model}...")
-            model.save(os.path.join(save_path, f"model_{n_model}.pt"), save_all=save_all)
-            print(">>> Evaluating vs random agent...")
+
+            model_file_name = f"{model_name}_{episode//eval_interval}" if save_all_models else model_name
+            txt = f">>> Checkpoint reached, saving model {model_file_name}..."
+            print(txt)
+            if log: logger.log(text = txt)
+
+            model.save(os.path.join(save_path, f"{model_file_name}.pt"), save_all=save_all)
+
+            txt = ">>> Evaluating vs random agent..."
+            print(txt)
+            if log: logger.log(text = txt)
+
             runTests(
                 players_number=(1, 1),
                 agents=[model, random_agent],
@@ -588,11 +636,22 @@ def train_PPO_competitive(
                 max_steps=max_steps_per_game,
                 training_progression=1.0,
                 nb_tests=100,
-                should_print=False
+                should_print=False,
+                logger= logger if log else None
             )
 
-    print("Saving final model...")
-    model.save(os.path.join(save_path, "model_final.pt"),save_all=save_all)
-    print("Self-play training finished.")
+    txt = "Saving final model..."
+    print(txt)
+    if log: logger.log(text = txt)
+
+    if save_all_models:
+        model.save(os.path.join(save_path, f"{model_name}_final.pt"),save_all=save_all)
+    else:
+        model.save(os.path.join(save_path, f"{model_name}.pt"),save_all=save_all)
+
+    txt = "Self-play training finished."
+    print(txt)
+    if log: logger.log(text = txt)
+    logger.close()
 
 

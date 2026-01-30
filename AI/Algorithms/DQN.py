@@ -22,6 +22,7 @@ import pandas as pd
 from AI.Network import DeepRLNetwork
 from Graphics.GraphicEngine import startDisplay
 from Engine.Environment import LearningEnvironment
+from logger import Logger
 
 class DQNAgent:
     def __init__(self, dimensions, batch_size, lr, sync_rate, buffer_size, epsilon_decay, linear_decay=True, 
@@ -462,7 +463,7 @@ def testingGame(players_number, agents, scoring_function, reward_coeff_dict, max
         step += 1
     return EpisodeResult(total_reward=total_reward, actions=actions, steps=step-1, score=env.score, success=env.isDone(), display=env.display)
 
-def runTests(players_number, agents, scoring_function, reward_coeff_dict, max_steps, training_progression=1.0, nb_tests=10_000, should_print=True):
+def runTests(players_number, agents, scoring_function, reward_coeff_dict, max_steps, training_progression=1.0, nb_tests=10_000, should_print=True, logger: Logger=None):
     
     rewards = 0
     steps = []
@@ -475,7 +476,7 @@ def runTests(players_number, agents, scoring_function, reward_coeff_dict, max_st
         result = testingGame(players_number=players_number, agents=agents, scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict, 
                              max_steps=max_steps, training_progression=training_progression)
         rewards += result.total_reward
-        steps.append(result.steps-1)
+        steps.append(result.steps)
         score = result.score
         score_left += score[0]
         score_right += score[1]
@@ -485,9 +486,10 @@ def runTests(players_number, agents, scoring_function, reward_coeff_dict, max_st
         
         if((episode+1)%(nb_tests/10) == 0 and should_print):
             print(f"Tests en cours: {(episode+1)/nb_tests*100}%")
-    
-    print(f"{nb_tests} tests | Reward: {rewards/nb_tests:.2f} | Steps: {np.median(steps)} | Score: {score_left/nb_tests:.2f} / {score_right/nb_tests:.2f} | failed: {nb_fail/nb_tests:.3f}")
-    return rewards/nb_tests, steps/nb_tests, score_left/nb_tests, score_right/nb_tests, nb_fail/nb_tests
+    txt = f"{nb_tests} tests | Reward: {rewards/nb_tests:.2f} | Steps (median): {np.median(steps)} | Steps (mean): {np.mean(steps)} | Score: {score_left/nb_tests:.2f} / {score_right/nb_tests:.2f} | failed: {nb_fail/nb_tests:.3f}"
+    print(txt)
+    if logger != None: logger.log(text = txt)
+    return rewards/nb_tests, np.median(steps), np.mean(steps), score_left/nb_tests, score_right/nb_tests, nb_fail/nb_tests
 
 
 
