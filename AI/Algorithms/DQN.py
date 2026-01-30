@@ -465,7 +465,7 @@ def testingGame(players_number, agents, scoring_function, reward_coeff_dict, max
 def runTests(players_number, agents, scoring_function, reward_coeff_dict, max_steps, training_progression=1.0, nb_tests=10_000, should_print=True):
     
     rewards = 0
-    steps = 0
+    steps = []
     nb_fail = 0
     score_left = 0
     score_right = 0
@@ -475,7 +475,7 @@ def runTests(players_number, agents, scoring_function, reward_coeff_dict, max_st
         result = testingGame(players_number=players_number, agents=agents, scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict, 
                              max_steps=max_steps, training_progression=training_progression)
         rewards += result.total_reward
-        steps += result.steps
+        steps.append(result.steps-1)
         score = result.score
         score_left += score[0]
         score_right += score[1]
@@ -486,7 +486,7 @@ def runTests(players_number, agents, scoring_function, reward_coeff_dict, max_st
         if((episode+1)%(nb_tests/10) == 0 and should_print):
             print(f"Tests en cours: {(episode+1)/nb_tests*100}%")
     
-    print(f"{nb_tests} tests | Reward: {rewards/nb_tests:.2f} | Steps: {steps/nb_tests:.1f} | Score: {score_left/nb_tests:.2f} / {score_right/nb_tests:.2f} | failed: {nb_fail/nb_tests:.3f}")
+    print(f"{nb_tests} tests | Reward: {rewards/nb_tests:.2f} | Steps: {np.median(steps)} | Score: {score_left/nb_tests:.2f} / {score_right/nb_tests:.2f} | failed: {nb_fail/nb_tests:.3f}")
     return rewards/nb_tests, steps/nb_tests, score_left/nb_tests, score_right/nb_tests, nb_fail/nb_tests
 
 

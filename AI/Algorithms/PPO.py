@@ -577,7 +577,7 @@ def train_PPO_competitive(
         # -------------------------
         if episode % eval_interval == 0:
             n_model = episode//eval_interval
-            print(f">>> Checkpoint reached, saving model number {n_model}...")
+            print(f">>> Checkpoint reached, saving model {n_model}...")
             model.save(os.path.join(save_path, f"model_{n_model}.pt"), save_all=save_all)
             print(">>> Evaluating vs random agent...")
             runTests(
