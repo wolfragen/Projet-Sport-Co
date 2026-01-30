@@ -11,8 +11,11 @@ import math
 import Settings
 from Engine.Actions import canShoot
 
+def sigmoid(x):
+    return 1/(1+math.exp(-x))
 
-def computeReward(coeff_dict, player, action, ball, left_goal_position, right_goal_position, score, training_progression=0.0, debug=False):
+
+def computeReward(coeff_dict, player, action, ball, left_goal_position, right_goal_position, score, mean_steps, training_progression=0.0, debug=False):
         
     body, shape = player
     ball_body, ball_shape = ball
@@ -22,6 +25,8 @@ def computeReward(coeff_dict, player, action, ball, left_goal_position, right_go
     alpha, beta = 1.0, 1.0  # relative weights
     
     static_reward = coeff_dict["static_reward"]
+    starting_static_reward = coeff_dict["starting_static_reward"]
+    ending_static_reward = coeff_dict["ending_static_reward"]
     delta_ball_player_coeff = coeff_dict["delta_ball_player_coeff"]
     delta_ball_goal_coeff = coeff_dict["delta_ball_goal_coeff"]
     can_shoot_coeff = coeff_dict["can_shoot_coeff"]
@@ -32,6 +37,8 @@ def computeReward(coeff_dict, player, action, ball, left_goal_position, right_go
     
     body, shape = player
     goal_reward = get_goal_reward(score, shape, goal_coeff, wrong_goal_coeff)
+    if(static_reward == 0):
+        static_reward = get_static_reward(starting_static_reward, ending_static_reward, mean_steps)
     
     # Delta position of player
     delta_ball_player_reward = get_delta_ball_player_reward(delta_ball_player_coeff, body, ball_body, alpha, beta)
@@ -59,6 +66,21 @@ def computeReward(coeff_dict, player, action, ball, left_goal_position, right_go
         return reward, reward_dict
 
     return reward
+
+def get_static_reward(starting_coeff, ending_coeff, mean_steps):
+    """
+    Docstring for get_static_reward
+    
+    :param starting_coeff: Coefficient pour mean_steps = 2000
+    :param ending_coeff: Coefficient pour mean_steps = 75
+    :param mean_steps: moyenne de steps par partie
+    :return: static_reward
+    """
+    sig = sigmoid((1000 - mean_steps) / 200)
+
+    coeff = (starting_coeff - ending_coeff) / 0.9903
+    static_reward = starting_coeff - coeff * sig
+    return static_reward
 
 def point_to_segment_distance(px, py, x1, y1, x2, y2):
     """Returns shortest distance from point (px, py) to segment (x1, y1)-(x2, y2)."""
