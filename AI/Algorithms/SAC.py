@@ -69,6 +69,12 @@ class Actor(nn.Module):
         mean = torch.tanh(mean)
         return action, log_prob, mean
     
+    def save(self, path):
+        torch.save(self.state_dict(), path)
+
+    def load(self, path):
+        self.load_state_dict(torch.load(path))
+    
 
     class Critic(DeepRLNetwork):
 
@@ -93,19 +99,25 @@ class Actor(nn.Module):
 class SACAgent:
 
 
-    def __init__(self, dimensions, batch_size, lr, sync_rate, buffer_size, epsilon_decay, linear_decay=True, 
-                 epsilon=1.0, epsilon_min=0.05, gamma=0.99, betas=(0.9, 0.999), eps=1e-8, soft_update=True, tau=5e-3, alpha=0.2,
-                 random=False, cuda=False):
+    def __init__(self, 
+                 dimensions, 
+                 batch_size, 
+                 lr, 
+                 buffer_size, 
+                 gamma=0.99, 
+                 betas=(0.9, 0.999), 
+                 eps=1e-8, 
+                 lr_decay=True, 
+                 tau=5e-3, 
+                 alpha=0.2,
+                 random=False, 
+                 cuda=False):
         
         self.batch_size = batch_size
         self.action_dim = dimensions[-1]
         self.lr = lr
         self.tau = tau
         self.gamma = gamma
-        self.epsilon = float(epsilon)
-        self.epsilon_decay = epsilon_decay
-        self.linear_decay = linear_decay
-        self.epsilon_min = epsilon_min
         self.random = random
 
         self.device = torch.device("cuda" if (cuda and torch.cuda.is_available()) else "cpu")
@@ -128,19 +140,17 @@ class SACAgent:
             prefetch=0,
         )
 
-        self.critic1 = DeepRLNetwork(dimensions).to(self.device)
-        self.critic2 = DeepRLNetwork(dimensions).to(self.device)
+        self.critic1 = Critic(dimensions[1], self.device, self.lr,  lr_decay)
+        self.critic2 = Critic(dimensions[1], self.device, self.lr,  lr_decay)
 
-        self.critic1_target = DeepRLNetwork(dimensions).to(self.device)
-        self.critic2_target = DeepRLNetwork(dimensions).to(self.device)
+        self.critic1_target = Critic(dimensions[1], self.device, self.lr,  lr_decay)
+        self.critic2_target = Critic(dimensions[1], self.device, self.lr,  lr_decay)
 
-        self.critic1_optimizer = torch.optim.Adam(self.critic1.parameters(), lr=self.lr, betas=betas, eps=eps)
-        self.critic2_optimizer = torch.optim.Adam(self.critic2.parameters(), lr=self.lr, betas=betas, eps=eps)
 
-        self.actor = Actor(dimensions).to(device)
+        self.actor = Actor(dimensions[0]).to(self.device)
         self.actor_optimizer() = torch.optim.Adam(self.actor.parameters(), lr=self.lr, betas=betas, eps=eps)
 
-        self.target_entropy = -self.action_dim
+        self.target_entropy = - torch.prod(torch.Tensor(self.action_dim))
 
         self.log_alpha = torch.zeros(1, requires_grad=True, device=device)
         self.alpha_optimizer = torch.optim.Adam([self.log_alpha], lr=self.lr, betas=betas, eps=eps)
@@ -194,7 +204,7 @@ class SACAgent:
             q2_next = self.critic2_target(next_states, next_action)
 
             q_next = torch.min(q1_next, q2_next) - self.alpha* next_log_pi
-            target_q = reward + (1-done)*self.gamma * q_next
+            target_q = rewards + (1-dones)*self.gamma * q_next
 
             q1 = self.critic1(states, actions)
             q2 = self.critic2(states, actions)
@@ -237,36 +247,59 @@ class SACAgent:
                 target.data.copy_(self.tau * source.data+ (1 - self.tau) * target.data)
 
 
-def train_SAC(model, scoring_function, reward_coeff_dict,  max_duration, num_episodes, save_path, interval_info):
-    env = LearningEnvironment(players_number=(1,0), scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict, human=False)
-    print(f"Starting training with Soft Actor Critic for {max_duration} seconds and {num_episodes} episodes")
+def train_SAC(
+        model, 
+        scoring_function, 
+        reward_coeff_dict,  
+        max_duration, 
+        num_episodes, 
+        max_step,
+        save_path, 
+        interval_info
+    ):
+
+    env = LearningEnvironment(
+        players_number=(1,0), 
+        scoring_function=scoring_function, 
+        reward_coeff_dict=reward_coeff_dict, 
+        human=False
+        )
+    
+    print(f"Starting training with Soft Actor Critic for {num_episodes} episodes")
 
     start = time.time()
     current_reward = 0
     num_game = 0
     score_history1, score_history2 = 0,0
 
+    step_in_game = 0
     total_step = 0
-    start_step = 10_000
+    start_step = 5000
 
-    for i in range(1, num_episodes+1):
+    for episode in range(1, num_episodes+1):
         if time.time() - start > max_duration:
             print("Reached max time for training")
             break
         state = env.getState(0)
 
-        for t in range(200):
+        for step in range(max_step):
+
+
+            state_t = torch.as_tensor(
+                state, dtype=torch.float32, device=model.device
+            ).unsqueeze(0)
 
             with torch.no_grad():
-                if total_step < start_step:
+                if step_in_game < start_step:
                     action = np.random.randint(model.action_dim)
                 else:
-                    action = model.act(state)
+                    action = model.act(state_t)
 
+            step_in_game += 1
             env.playerAct(0, action)
             reward = env.step()[0]
             current_reward += reward
-            done = env.isDone()
+            done = env.isDone() or (step == max_step - 1)
             next_state = env.getState(0)
 
             model.remember(state, action, reward, next_state, done)
@@ -276,9 +309,36 @@ def train_SAC(model, scoring_function, reward_coeff_dict,  max_duration, num_epi
                 score_history1 += env.score[0]
                 score_history2 += env.score[1]
                 num_game += 1
+                total_step += step_in_game
                 env.reset()
+                step_in_game = 0
 
-            loss = model.replay()
+
+            if len(model.memory) >= min_buffer_size:
+                with torch.no_grad():
+                    model.replay()
+
+                if episode % interval_info:
+                    avg_reward = current_reward / num_game if num_game > 0 else 0
+                    avg_step = total_step / num_game if num_game > 0 else 0
+
+                    print(
+                        f"[{int(time.time()-start)}s] Ep {episode} | "
+                        f"Games {num_game} | "
+                        f"Avg steps {avg_step:.1f} | "
+                        f"Score {score_history1/num_game:.2f}-{score_history2/num_game:.2f} | "
+                        f"Reward {avg_reward:.4f} "
+                    )
+
+                    current_reward = 0.0
+                    score_history1 = score_history2 = 0
+                    num_game = 0
+                    total_step = 0
+
+    print("Saving final model...")
+    model.save(os.path.join(save_path, "model.pt"))
+    print("Self-play training finished.")
+
 
 
             
