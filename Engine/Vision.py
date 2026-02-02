@@ -197,7 +197,7 @@ def getVision(space, players: list[tuple[pymunk.Body, pymunk.Shape]], player_id,
         vision_array[6:8] = (opp_goal_dx, opp_goal_dy)
         vision_array[8:10] = (ball_vx_rel, ball_vy_rel)
         vision_array[10:12] = (dx_opp_ball, dy_opp_ball)
-        vision_array[12] = min(math.sqrt(dx_opp_ball**2 + dy_opp_ball**2), 250)
+        #vision_array[12] = min(math.sqrt(dx_opp_ball**2 + dy_opp_ball**2), 250)
         
 
     """ # TODO: remettre si on remet le ray Tracing
