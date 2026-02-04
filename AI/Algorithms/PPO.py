@@ -520,7 +520,7 @@ def train_PPO_competitive(
         if len(opponent_pool) == 0:
             opponent = clone_opponent(model)
         else:
-            opponent = random.choice(opponent_pool[-3:])
+            opponent = random.choice(opponent_pool)
 
         if opponent is None : 
             env = LearningEnvironment(

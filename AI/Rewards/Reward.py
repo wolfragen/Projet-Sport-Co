@@ -104,15 +104,11 @@ def get_score_diff_static_reward(
 
     diff = my_score - opp_score
 
-    # Draw → slight negative to discourage stalling
-    if diff == 0:
-        return draw_penalty
-
     # Clamp for PPO stability
-    diff = max(-max_goal_diff, min(diff, max_goal_diff))
+    diff = max(-max_goal_diff, min(diff, max_goal_diff)) 
 
     # Smooth, bounded, symmetric
-    return lead_coeff * math.tanh(diff)
+    return lead_coeff * math.tanh(diff) + draw_penalty
 
 def point_to_segment_distance(px, py, x1, y1, x2, y2):
     """Returns shortest distance from point (px, py) to segment (x1, y1)-(x2, y2)."""
