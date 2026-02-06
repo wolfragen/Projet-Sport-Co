@@ -41,19 +41,24 @@ class LearningEnvironment():
         self.draw_options = draw_options
         self.phantom_player = None
         if(self.n_players == 1 and Settings.COMPETITIVE_VISION): # TODO phantom_player is True...
-            self.phantom_player = {"position_x": Settings.SCREEN_OFFSET + randint(0, Settings.DIM_X-Settings.PLAYER_LEN), 
-                               "position_y": Settings.SCREEN_OFFSET + randint(0, Settings.DIM_Y-Settings.PLAYER_LEN)}
+            self.phantom_player = {"position_x": Settings.SCREEN_OFFSET + randint(Settings.PLAYER_LEN, Settings.DIM_X-Settings.PLAYER_LEN), 
+                               "position_y": Settings.SCREEN_OFFSET + randint(Settings.PLAYER_LEN, Settings.DIM_Y-Settings.PLAYER_LEN)}
         
         self._init_game()
         if(display):
             self._initDisplay(simulation_speed)
             
     
-    def reset(self):
-        self._init_game()
+    def reset(self, soft=False):
+        if(soft):
+            self._init_game(score = self.score)
+        else:
+            self._init_game()
+        self.done = False
         
     def step(self, human_events = True, debug=False):
         
+        self.previous_score = self.score.copy()
         define_previous_pos(self.players, self.ball)
         
         space = self.space
@@ -86,7 +91,8 @@ class LearningEnvironment():
         player = self.players[player_id]
         action = self.previous_actions[player_id]
         return self.scoring_function(self.reward_coeff_dict, player, action, self.ball, self.left_goal_position, 
-                                       self.right_goal_position, self.score, self.mean_steps, self.training_progression, debug)
+                                       self.right_goal_position, self.score, self.previous_score, self.mean_steps, 
+                                       self.training_progression, debug)
     
     def isDone(self):
         return self.done
@@ -94,9 +100,11 @@ class LearningEnvironment():
     
     
     def _init_game(self, score : np.array = None):
-        self.score = np.zeros(2)
         if(score is not None):
             self.score = score
+        else:
+            self.score = np.zeros(2)
+            self.previous_score = np.zeros(2)
         space = createSpace()
         
         self.left_goal_position, self.right_goal_position = buildBoard(space) # Creates static objects
@@ -138,8 +146,7 @@ class LearningEnvironment():
     def _checkIfDone(self):
         self.done = checkIfGoal(self.ball, self.score)
         if(self.done and self.human):
-            self.done = False
-            self._init_game(self.score)
+            self.reset(soft=True)
         
     def _processHumanEvents(self):
         should_stop, action = process_events()

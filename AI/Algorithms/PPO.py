@@ -398,6 +398,14 @@ def train_PPO_model(
     model.save(save_path + "model.pt")
     print("Training finished")
     
+    
+def clone_opponent(source: PPOAgent) -> PPOAgent:
+    opp = copy.deepcopy(source)
+    opp.actor.eval()
+    for p in opp.actor.parameters():
+        p.requires_grad = False
+    return opp
+    
 
 def train_PPO_competitive(
     model: PPOAgent,
@@ -431,13 +439,6 @@ def train_PPO_competitive(
     # Opponent pool utilities
     # -------------------------
     opponent_pool = []
-
-    def clone_opponent(source: PPOAgent) -> PPOAgent:
-        opp = copy.deepcopy(source)
-        opp.actor.eval()
-        for p in opp.actor.parameters():
-            p.requires_grad = False
-        return opp
 
     # Initial opponent (episode 0 snapshot)
     opponent_pool.append(clone_opponent(model))
@@ -494,8 +495,8 @@ def train_PPO_competitive(
             opponent = model                        # mirror, 10%
         elif r < 0.7:
             opponent = opponent_pool[-1]       # most recent, 60%
-        elif r < 0.9:
-            opponent = random.choice(opponent_pool) # random, 20%
+        elif r < 1.1:
+            opponent = random.choice(opponent_pool) # random, 20% -> TODO 30% pour l'instant
         else:
             opponent = None                       # solo-play 10%
 
@@ -655,5 +656,303 @@ def train_PPO_competitive(
     print(txt)
     if log: logger.log(text = txt)
     logger.close()
+    
+    
+def train_PPO_competitive_full_games(
+    model: PPOAgent,
+    max_duration: int,
+    num_episodes: int,
+    save_path: str,
+    interval_notify: int = 10,
+    opponent_save_interval: int = 50,
+    max_pool_size: int = 10,
+    draw_penalty: float = -0.5,
+    max_steps_per_game: int = 2048,
+    eval_interval: int = 500,
+    save_all: bool = False,
+    save_all_models: bool = False,
+    model_name: str = "model",
+    log: bool = False,
+):
+    """
+    Train a PPO agent using competitive self-play with an opponent pool.
+    Includes full training diagnostics and evaluation vs a random agent.
+    """
+
+    env = LearningEnvironment(
+        players_number=(1, 1),
+        scoring_function=model.scoring_function,
+        reward_coeff_dict=model.reward_coeff_dict,
+        human=False
+    )
+
+    # -------------------------
+    # Training statistics
+    # -------------------------
+    current_reward = 0.0
+    score_0 = score_1 = 0
+    games_played = 0
+    wins = losses = draws = 0
+    total_steps = 0
+    reward_sums = {}  
+    num_game = 0
+
+    state = env.getState(0)
+    step_in_game = 0
+    mean_steps = deque(maxlen=100)
+    mean_steps.append(max_steps_per_game)
+    total_steps_for_mean = 0
+    games_played_for_mean = 0
+
+    opponent_pool = []
+
+    # bootstrap pool with initial snapshot
+    opponent_pool.append(clone_opponent(model))
+
+    # Random agent for evaluation
+    random_agent = RandomAgent(action_dim=4)
+
+    if log:
+        logger = Logger(os.path.join(save_path, f"{model_name}.txt"))
+        logger.log("Parameters:")
+        model.log_params(logger)
+        logger.log(text = f"opponent_save_interval: {opponent_save_interval}")
+        logger.log(text = f"max_pool_size: {max_pool_size}")
+        logger.log(text = f"draw_penalty: {draw_penalty}")
+        logger.log(text = f"max_steps_per_game: {max_steps_per_game}")
+        logger.log(text = "********************")
+
+    txt = f"Starting PPO self-play with opponent pool ({num_episodes} episodes)"
+    print(txt)
+    if log: logger.log(text = txt)
+
+    start_time = time.time()
+
+    # =========================
+    # Training loop
+    # =========================
+    for episode in range(1, num_episodes + 1):
+
+        if time.time() - start_time > max_duration:
+            txt = "Max training time reached."
+            print(txt)
+            if log: logger.log(text = txt)
+            break
+
+        # ---- select opponent (frozen)
+        if len(opponent_pool) == 0:
+            opponent = clone_opponent(model)
+        else:
+            opponent = random.choice(opponent_pool[-10:])
+
+        if opponent is None : 
+            env = LearningEnvironment(
+                players_number=(1, 0),
+                scoring_function=model.scoring_function,
+                reward_coeff_dict=model.reward_coeff_dict,
+                mean_steps = sum(mean_steps)/len(mean_steps),
+                human=False
+            )
+        else:
+            env = LearningEnvironment(
+                players_number=(1, 1),
+                scoring_function=model.scoring_function,
+                reward_coeff_dict=model.reward_coeff_dict,
+                mean_steps = sum(mean_steps)/len(mean_steps),
+                human=False
+            )
+
+        # ---- rollout
+        for rollout in range(model.rollout_size):
+
+            state_t = torch.as_tensor(
+                state, dtype=torch.float32, device=model.device
+            ).unsqueeze(0)
+
+            with torch.no_grad():
+                action_0, logprob = model.actor.act(state)
+                value = model.critic.net(state_t).squeeze(-1).item()
+                if opponent is not None : action_1 = opponent.act(env.getState(1))
+
+            env.playerAct(0, action_0)
+            if opponent is not None : env.playerAct(1, action_1)
+
+            rewards = env.step(debug=True)
+            reward = rewards[0]
+
+            reward_dict = env.last_reward_components[0]
+
+            # Initialisation dynamique des clÃ©s
+            if not reward_sums:
+                reward_sums = {k: 0.0 for k in reward_dict.keys()}
+
+            for k, v in reward_dict.items():
+                reward_sums[k] += v
+
+            current_reward += reward
+            step_in_game += 1
+
+            goal_scored = env.isDone()
+            timeout = step_in_game >= max_steps_per_game
+            rollout_timeout = (rollout == model.rollout_size-1) and not timeout
+            done_ppo = timeout or rollout_timeout
+            
+            if goal_scored:
+                env.reset_after_goal()
+
+            if timeout:
+                reward += draw_penalty
+                current_reward += draw_penalty
+
+            model.remember(state, logprob, done_ppo, value, action_0, reward)
+
+            if done_ppo:
+                num_game += 1
+                if timeout:
+                    total_steps += step_in_game
+                    total_steps_for_mean += step_in_game
+                    games_played_for_mean += 1
+                    games_played += 1
+
+                    if env.score[0] > env.score[1]:
+                        wins += 1
+                    elif env.score[0] < env.score[1]:
+                        losses += 1
+                    else:
+                        draws += 1
+
+                    score_0 += env.score[0]
+                    score_1 += env.score[1]
+
+
+                    env.reset()
+                    step_in_game = 0
+
+            state = env.getState(0)
+
+        # ---- PPO update
+        with torch.no_grad():
+            if done_ppo:
+                last_value = 0.0
+            else:
+                state_t = torch.as_tensor(
+                    state, dtype=torch.float32, device=model.device
+                ).unsqueeze(0)
+                last_value = model.critic.net(state_t).squeeze(-1).item()
+
+        model.replay(last_value=last_value, last_done=done_ppo)
+        model.init_memory()
+
+        if games_played_for_mean > 0:
+            mean_steps.append(total_steps_for_mean / games_played_for_mean)
+        total_steps_for_mean = 0
+        games_played_for_mean = 0
+
+        # ---- save opponent snapshot
+        if episode % opponent_save_interval == 0:
+            opponent_pool.append(clone_opponent(model))
+
+            if len(opponent_pool) > max_pool_size:
+                opponent_pool.pop(0)
+
+
+        # -------------------------
+        # Training diagnostics
+        # -------------------------
+        if episode % interval_notify == 0:
+            avg_reward_components = {
+                k: v / max(num_game, 1)
+                for k, v in reward_sums.items()
+            }
+            win_rate = wins / games_played if games_played > 0 else 0
+
+            avg_reward_str = " | ".join([f"{k}: {v:.4f}" for k, v in avg_reward_components.items()])
+
+            txt = f"[{int(time.time()-start_time)}s] Ep {episode} | "\
+                f"Games {games_played} | "\
+                f"W/D/L {wins}/{draws}/{losses} | "\
+                f"({win_rate:.2f}) | "\
+                f"Score {score_0/games_played:.2f}-{score_1/games_played:.2f} | "\
+                f"{avg_reward_str} | "\
+                f"Pool {len(opponent_pool)}"
+            
+            print(txt)
+
+            if log: logger.log(txt)
+
+            # reset stats
+            current_reward = 0.0
+            score_0 = score_1 = 0
+            games_played = 0
+            wins = losses = draws = 0
+            total_steps = 0
+            num_game = 0
+            reward_sums = {k: 0.0 for k in reward_sums.keys()}
+
+        # -------------------------
+        # Evaluation vs random agent
+        # -------------------------
+        if episode % eval_interval == 0:
+            model_file_name = f"{model_name}_{episode//eval_interval}" if save_all_models else model_name
+            txt = f">>> Checkpoint reached, saving model {model_file_name}..."
+            print(txt)
+            if log: logger.log(text = txt)
+
+            model.save(os.path.join(save_path, f"{model_file_name}.pt"), save_all=save_all)
+
+            txt = ">>> Evaluating vs random agent..."
+            print(txt)
+            if log: logger.log(text = txt)
+            runTests(
+                players_number=(1, 1),
+                agents=[model, random_agent],
+                scoring_function=model.scoring_function,
+                reward_coeff_dict=model.reward_coeff_dict,
+                max_steps=max_steps_per_game,
+                training_progression=1.0,
+                nb_tests=100,
+                should_print=True,
+                logger=logger if log else None
+            )
+
+    txt = "Saving final model..."
+    print(txt)
+    if log: logger.log(text = txt)
+
+    if save_all_models:
+        model.save(os.path.join(save_path, f"{model_name}_final.pt"),save_all=save_all)
+    else:
+        model.save(os.path.join(save_path, f"{model_name}.pt"),save_all=save_all)
+
+    txt = "Self-play training finished."
+    print(txt)
+    if log: logger.log(text = txt)
+    logger.close()
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
 
 
