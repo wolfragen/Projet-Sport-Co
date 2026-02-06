@@ -189,6 +189,13 @@ def getVision(space, players: list[tuple[pymunk.Body, pymunk.Shape]], player_id,
         
         ball_vx_rel = (ball_body.velocity[0] - body.velocity[0]) / (Settings.SHOOTING_SPEED + Settings.PLAYER_SPEED)
         ball_vy_rel = (ball_body.velocity[1] - body.velocity[1]) / (Settings.SHOOTING_SPEED + Settings.PLAYER_SPEED)
+            
+        if(not shape.left_team):
+            dx_opp_ball = - dx_opp_ball
+            dy_opp_ball = - dy_opp_ball
+            ball_vx_rel = - ball_vx_rel
+            ball_vy_rel = - ball_vy_rel
+        
         
         vision_array[0] = sin_a
         vision_array[1] = cos_a
@@ -197,7 +204,6 @@ def getVision(space, players: list[tuple[pymunk.Body, pymunk.Shape]], player_id,
         vision_array[6:8] = (opp_goal_dx, opp_goal_dy)
         vision_array[8:10] = (ball_vx_rel, ball_vy_rel)
         vision_array[10:12] = (dx_opp_ball, dy_opp_ball)
-        #vision_array[12] = min(math.sqrt(dx_opp_ball**2 + dy_opp_ball**2), 250)
         
 
     """ # TODO: remettre si on remet le ray Tracing
