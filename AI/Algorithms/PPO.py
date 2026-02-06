@@ -109,7 +109,7 @@ class PPOAgent:
     def __init__(self, dimensions: tuple[list[int]], scoring_function: callable, reward_coeff_dict : dict[float], 
                  rollout_size : int, lr_actor: float, lr_critic : float, n_epoch: int,
                  lr_decay: bool=True, clip_eps: float=0.2, gamma: float=0.99, lmbda: float=0.95, 
-                 critic_loss_coeff: float=0.5, entropy_loss_coeff: float=0.01, normalize_advantage: bool=True, 
+                 critic_loss_coeff: float=0.5, entropy_loss_coeff: float=0.01, normalize_advantage: bool=True,
                  max_grad_norm: float=1.0, cuda: bool=False):
         
         assert dimensions[1][-1] == 1, "Output of the critic network must be 1 dimensionnal"
