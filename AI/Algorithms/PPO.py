@@ -296,13 +296,15 @@ def train_PPO_model(
     model : PPOAgent
         The PPOAgent to train
     max_duration : int
-        Max duration of the training process in seconds.
+        Max duration of the training process in seconds
     num_episodes : int
-        Number of episodes for the training. Can stop earlier if max_duration is reached. 
+        Number of episodes for the training. Can stop earlier if max_duration is reached
     save_path : str
         Where the model should be saved 
     interval_notify : int
-        Number of episode until printing information about the current progress in the console"""
+        Number of episode until printing information about the current progress in the console. Defaults to 20
+    draw_penalty : float
+        Penalty in case of draw. Defaults to -0.5 """
 
     env = LearningEnvironment(players_number=(1,0), 
                               scoring_function=model.scoring_function, 
