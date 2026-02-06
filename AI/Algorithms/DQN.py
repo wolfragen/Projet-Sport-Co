@@ -474,11 +474,13 @@ def runTests(players_number, agents, scoring_function, reward_coeff_dict, max_st
         
         result = testingGame(players_number=players_number, agents=agents, scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict, 
                              max_steps=max_steps, training_progression=training_progression)
-        rewards += result.total_reward
-        steps += result.steps
+        
         score = result.score
-        score_left += score[0]
-        score_right += score[1]
+        if(score[0]+score[1]!=0):
+            rewards += result.total_reward
+            steps += result.steps
+            score_left += score[0]
+            score_right += score[1]
         
         if(score[0] != 1):
             nb_fail += 1
