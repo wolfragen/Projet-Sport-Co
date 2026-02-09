@@ -469,6 +469,9 @@ def runTests(players_number, agents, scoring_function, reward_coeff_dict, max_st
     nb_fail = 0
     score_left = 0
     score_right = 0
+    nb_non_draw = 0
+    
+    start_time = time.time()
     
     for episode in range(nb_tests):
         
@@ -484,12 +487,14 @@ def runTests(players_number, agents, scoring_function, reward_coeff_dict, max_st
         
         if(score[0] != 1):
             nb_fail += 1
+        if(score[0] != 0 or score[1] != 0):
+            nb_non_draw += 1
         
         if((episode+1)%(nb_tests/10) == 0 and should_print):
-            print(f"Tests en cours: {(episode+1)/nb_tests*100}%")
+            print(f"[{round(time.time() - start_time)}s] Tests en cours: {(episode+1)/nb_tests*100}%")
     
-    print(f"{nb_tests} tests | Reward: {rewards/nb_tests:.2f} | Steps: {steps/nb_tests:.1f} | Score: {score_left/nb_tests:.2f} / {score_right/nb_tests:.2f} | failed: {nb_fail/nb_tests:.3f}")
-    return rewards/nb_tests, steps/nb_tests, score_left/nb_tests, score_right/nb_tests, nb_fail/nb_tests
+    print(f"{nb_tests} tests | Reward: {rewards/nb_non_draw:.2f} | Steps: {steps/nb_non_draw:.1f} | Score: {score_left/nb_tests:.2f} / {score_right/nb_tests:.2f} | failed: {nb_fail/nb_tests:.3f}")
+    return rewards/nb_non_draw, steps/nb_non_draw, score_left/nb_tests, score_right/nb_tests, nb_fail/nb_tests
 
 
 
