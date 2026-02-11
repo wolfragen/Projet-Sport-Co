@@ -125,7 +125,7 @@ def rayTracing(space, player: tuple[pymunk.Body, pymunk.Shape]) -> tuple[np.ndar
     return vision_array
 
 
-def getVision(space, players: list[tuple[pymunk.Body, pymunk.Shape]], player_id, ball, left_goal_position, right_goal_position) -> np.ndarray:
+def getVision(space, players: list[tuple[pymunk.Body, pymunk.Shape]], player_id, ball, left_goal_position, right_goal_position, phantom_player=None) -> np.ndarray:
 
     vision_array = np.zeros(Settings.ENTRY_NEURONS, dtype=np.float32)
 
@@ -173,9 +173,11 @@ def getVision(space, players: list[tuple[pymunk.Body, pymunk.Shape]], player_id,
             
     else:
         # Compétitif, vision joueur adverse également !
-        if(len(players) == 1):
-            dx_opp_ball = (ball_body.position[0] - (right_goal_position[0]+100)) / dim_x
-            dy_opp_ball = (ball_body.position[1] - right_goal_position[1]) / dim_y
+        if(Settings.COMPETITIVE_VISION and phantom_player is None and len(players) == 1):
+            print("ERREUR, il faut rajouter un joueur phantôme ou un deuxième joueur.")
+        if(phantom_player is not None):
+            dx_opp_ball = (ball_body.position[0] - phantom_player["position_x"]) / dim_x
+            dy_opp_ball = (ball_body.position[1] - phantom_player["position_y"]) / dim_y
         else:
             opponent = players[0]
             if(player_id == 0):
@@ -187,6 +189,13 @@ def getVision(space, players: list[tuple[pymunk.Body, pymunk.Shape]], player_id,
         
         ball_vx_rel = (ball_body.velocity[0] - body.velocity[0]) / (Settings.SHOOTING_SPEED + Settings.PLAYER_SPEED)
         ball_vy_rel = (ball_body.velocity[1] - body.velocity[1]) / (Settings.SHOOTING_SPEED + Settings.PLAYER_SPEED)
+            
+        if(not shape.left_team):
+            dx_opp_ball = - dx_opp_ball
+            dy_opp_ball = - dy_opp_ball
+            ball_vx_rel = - ball_vx_rel
+            ball_vy_rel = - ball_vy_rel
+        
         
         vision_array[0] = sin_a
         vision_array[1] = cos_a

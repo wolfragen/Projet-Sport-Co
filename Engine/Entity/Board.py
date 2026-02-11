@@ -18,10 +18,12 @@ def buildBoard(space):
     width = Settings.DIM_X
     height = Settings.DIM_Y
     goal_len = Settings.GOAL_LEN
+    wall_radius = Settings.WALL_RADIUS
+    player_len = Settings.PLAYER_LEN
 
     # Top and bottom lines
-    top_line = (offset, offset), (offset + width, offset)
-    bottom_line = (offset, offset + height), (offset + width, offset + height)
+    top_line = (offset+player_len, offset), (offset + width-player_len, offset)
+    bottom_line = (offset+player_len, offset + height), (offset + width-player_len, offset + height)
 
     # Vertical sides with goal openings
     left_top_goal = offset + (height - goal_len)/2
@@ -32,16 +34,22 @@ def buildBoard(space):
     # Static walls
     static_lines = [
         # Top and bottom
-        pymunk.Segment(static_body, top_line[0], top_line[1], 0.0),
-        pymunk.Segment(static_body, bottom_line[0], bottom_line[1], 0.0),
+        pymunk.Segment(static_body, top_line[0], top_line[1], wall_radius),
+        pymunk.Segment(static_body, bottom_line[0], bottom_line[1], wall_radius),
 
         # Left side with goal opening
-        pymunk.Segment(static_body, (offset, offset), (offset, left_top_goal), 0.0),
-        pymunk.Segment(static_body, (offset, left_bottom_goal), (offset, offset + height), 0.0),
+        pymunk.Segment(static_body, (offset, offset+player_len), (offset, left_top_goal), wall_radius),
+        pymunk.Segment(static_body, (offset, left_bottom_goal), (offset, offset + height-player_len), wall_radius),
 
         # Right side with goal opening
-        pymunk.Segment(static_body, (offset + width, offset), (offset + width, right_top_goal), 0.0),
-        pymunk.Segment(static_body, (offset + width, right_bottom_goal), (offset + width, offset + height), 0.0),
+        pymunk.Segment(static_body, (offset + width, offset+player_len), (offset + width, right_top_goal), wall_radius),
+        pymunk.Segment(static_body, (offset + width, right_bottom_goal), (offset + width, offset + height-player_len), wall_radius),
+        
+        # Build small segments to facilitate ball-handling around the corners
+        pymunk.Segment(static_body, (offset + player_len, offset), (offset, offset + player_len), wall_radius),
+        pymunk.Segment(static_body, (offset + width - player_len, offset), (offset + width, offset + player_len), wall_radius),
+        pymunk.Segment(static_body, (offset + player_len, offset + height), (offset, offset + height - player_len), wall_radius),
+        pymunk.Segment(static_body, (offset + width - player_len, offset + height), (offset + width, offset + height - player_len), wall_radius),
     ]
 
     # Set elasticity and friction for walls

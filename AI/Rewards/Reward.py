@@ -15,7 +15,7 @@ def sigmoid(x):
     return 1/(1+math.exp(-x))
 
 
-def computeReward(coeff_dict, player, action, ball, left_goal_position, right_goal_position, score, prev_score, mean_steps, training_progression=0.0, debug=True):
+def computeReward(coeff_dict, player, action, ball, left_goal_position, right_goal_position, score, previous_score, mean_steps, training_progression=0.0, debug=False):
         
     body, shape = player
     ball_body, ball_shape = ball
@@ -24,37 +24,46 @@ def computeReward(coeff_dict, player, action, ball, left_goal_position, right_go
         
     alpha, beta = 1.0, 1.0  # relative weights
     
-    static_lead_reward = coeff_dict["static_lead_reward"]
-    static_draw_reward = coeff_dict["static_draw_reward"]
-    #starting_static_reward = coeff_dict["starting_static_reward"]
-    #ending_static_reward = coeff_dict["ending_static_reward"]
-    delta_ball_player_coeff = coeff_dict["delta_ball_player_coeff"]
-    delta_ball_goal_coeff = coeff_dict["delta_ball_goal_coeff"]
-    can_shoot_coeff = coeff_dict["can_shoot_coeff"]
-    goal_coeff = coeff_dict["goal_coeff"]
-    wrong_goal_coeff = coeff_dict["wrong_goal_coeff"]
-    has_ball_coeff = coeff_dict["has_ball_coeff"]
+    static_reward = coeff_dict["static_reward"] if "static_reward" in coeff_dict.keys() else None
+    static_lead_reward = coeff_dict["static_lead_reward"] if "static_lead_reward" in coeff_dict.keys() else None
+    static_draw_reward = coeff_dict["static_draw_reward"] if "static_draw_reward" in coeff_dict.keys() else None
+    starting_static_reward = coeff_dict["starting_static_reward"] if "starting_static_reward" in coeff_dict.keys() else None
+    ending_static_reward = coeff_dict["ending_static_reward"] if "ending_static_reward" in coeff_dict.keys() else None
+    delta_ball_player_coeff = coeff_dict["delta_ball_player_coeff"] if "delta_ball_player_coeff" in coeff_dict.keys() else None
+    delta_ball_goal_coeff = coeff_dict["delta_ball_goal_coeff"] if "delta_ball_goal_coeff" in coeff_dict.keys() else None
+    can_shoot_coeff = coeff_dict["can_shoot_coeff"] if "can_shoot_coeff" in coeff_dict.keys() else None
+    goal_coeff = coeff_dict["goal_coeff"] if "goal_coeff" in coeff_dict.keys() else None
+    wrong_goal_coeff = coeff_dict["wrong_goal_coeff"] if "wrong_goal_coeff" in coeff_dict.keys() else None
+    has_ball_coeff = coeff_dict["has_ball_coeff"] if "has_ball_coeff" in coeff_dict.keys() else None
     
     
     body, shape = player
-    goal_reward = get_goal_reward(score, prev_score, shape, goal_coeff, wrong_goal_coeff)
-    static_reward = get_score_diff_static_reward(
-        score,
-        shape,
-        lead_coeff=coeff_dict["static_lead_reward"],
-        draw_penalty=coeff_dict["static_draw_reward"] 
-    )
-
+    goal_reward = get_goal_reward(score, previous_score, shape, goal_coeff, wrong_goal_coeff)
+    if(static_reward == None):
+        static_reward = 0
+    if(starting_static_reward is not None and ending_static_reward is not None):
+        static_reward = get_static_reward(starting_static_reward, ending_static_reward, mean_steps)
+    if(static_lead_reward is not None and static_draw_reward is not None):
+        static_reward = get_score_diff_static_reward(score, shape, static_draw_reward, static_lead_reward)
     
     # Delta position of player
-    delta_ball_player_reward = get_delta_ball_player_reward(delta_ball_player_coeff, body, ball_body, alpha, beta)
+    delta_ball_player_reward = 0
+    if(delta_ball_player_coeff is not None):
+        delta_ball_player_reward = get_delta_ball_player_reward(delta_ball_player_coeff, body, ball_body, alpha, beta)
     
     
     # Distance of ball to opponent goal
-    delta_ball_goal_reward = get_delta_ball_goal_reward(shape, ball_body, right_goal_position, left_goal_position, delta_ball_goal_coeff)
+    delta_ball_goal_reward = 0
+    if(delta_ball_goal_coeff is not None):
+        delta_ball_goal_reward = get_delta_ball_goal_reward(shape, ball_body, right_goal_position, left_goal_position, delta_ball_goal_coeff)
         
-    can_shoot_reward = get_shooting_reward(action, body, ball_body, shape, left_goal_position, right_goal_position, can_shoot_coeff)
-    has_ball_reward = get_has_ball_reward(action, body, has_ball_coeff)
+    can_shoot_reward = 0
+    if(can_shoot_coeff is not None):
+        can_shoot_reward = get_shooting_reward(action, body, ball_body, shape, left_goal_position, right_goal_position, can_shoot_coeff)
+    
+    has_ball_reward = 0
+    if(has_ball_coeff is not None):
+        has_ball_reward = get_has_ball_reward(action, body, has_ball_coeff)
     
     reward = (static_reward + delta_ball_goal_reward + delta_ball_player_reward + can_shoot_reward + has_ball_reward + 
               goal_reward)
@@ -146,9 +155,6 @@ def get_goal_reward(score, prev_score, shape, goal_coeff, wrong_goal_coeff):
         return wrong_goal_coeff
 
     return 0.0
-
-
-
 
 def get_has_ball_reward(action, body, has_ball_coeff):
     if(body.canShoot and not body.hadBall):

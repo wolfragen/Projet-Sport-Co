@@ -7,6 +7,7 @@ Created on Thu Oct 30 19:15:11 2025
 
 import numpy as np
 import pygame
+from random import randint
 
 import Settings
 from Graphics.GraphicEngine import display, startDisplay
@@ -21,7 +22,7 @@ from Player.PlayerActions import process_events
 
 class LearningEnvironment():
     def __init__(self, players_number: list[int,int], scoring_function, reward_coeff_dict, mean_steps=2000, training_progression=0.0,
-        display: bool = False, simulation_speed: float = 1.0, screen=None, draw_options=None, human=False):
+        display: bool = False, simulation_speed: float = 1.0, screen=None, draw_options=None, human=False, phantom_player = False):
         
         self.done = False
         self.human = human
@@ -39,6 +40,10 @@ class LearningEnvironment():
         self.screen = screen
         self.draw_options = draw_options
         self.last_reward_components = [{} for _ in range(self.n_players)]
+        self.phantom_player = None
+        if(self.n_players == 1 and Settings.COMPETITIVE_VISION): # TODO phantom_player is True...
+            self.phantom_player = {"position_x": Settings.SCREEN_OFFSET + randint(Settings.PLAYER_LEN, Settings.DIM_X-Settings.PLAYER_LEN), 
+                               "position_y": Settings.SCREEN_OFFSET + randint(Settings.PLAYER_LEN, Settings.DIM_Y-Settings.PLAYER_LEN)}
         
         self.prev_score = np.zeros(2)
         self._init_game()
@@ -46,18 +51,22 @@ class LearningEnvironment():
             self._initDisplay(simulation_speed)
             
     
-    def reset(self):
-        self._init_game()
+    def reset(self, soft=False):
+        if(soft):
+            self._init_game(score = self.score)
+        else:
+            self._init_game()
+        self.done = False
         
     def step(self, human_events = True, debug=False):
         
-        self.prev_score = self.score.copy()
-
+        self.previous_score = self.score.copy()
         define_previous_pos(self.players, self.ball)
         
         space = self.space
-        for _ in range(Settings.DELTA_TIME):
-            space.step(0.001)
+        dt = Settings.DELTA_TIME/Settings.DELTA_SIMU
+        for _ in range(Settings.DELTA_SIMU):
+            space.step(dt/1000)
 
         self._checkIfDone()
         
@@ -78,7 +87,7 @@ class LearningEnvironment():
         return play(player, self.ball, action)
         
     def getState(self, player_id):
-        return getVision(self.space, self.players, player_id, self.ball, self.left_goal_position, self.right_goal_position)
+        return getVision(self.space, self.players, player_id, self.ball, self.left_goal_position, self.right_goal_position, phantom_player=self.phantom_player)
     
     def getReward(self, player_id, debug=False):
         player = self.players[player_id]
@@ -113,14 +122,16 @@ class LearningEnvironment():
     
     
     def _init_game(self, score : np.array = None):
-        self.score = np.zeros(2)
         if(score is not None):
             self.score = score
+        else:
+            self.score = np.zeros(2)
+            self.previous_score = np.zeros(2)
         space = createSpace()
         
         self.left_goal_position, self.right_goal_position = buildBoard(space) # Creates static objects
         self.ball = buildBall(space) # Creates the ball
-        self.players, self.players_left, self.players_right, self.selected_player = buildPlayers(space, self.players_number, self.human) # Creates the players
+        self.players, self.players_left, self.players_right, self.selected_player = buildPlayers(space, self.players_number, self.human, self.phantom_player) # Creates the players
         self.space = space
         define_previous_pos(self.players, self.ball)
         checkPlayersCanShoot(self.players, self.ball)
@@ -157,8 +168,7 @@ class LearningEnvironment():
     def _checkIfDone(self):
         self.done = checkIfGoal(self.ball, self.score)
         if(self.done and self.human):
-            self.done = False
-            self._init_game(self.score)
+            self.reset(soft=True)
         
     def _processHumanEvents(self):
         should_stop, action = process_events()
