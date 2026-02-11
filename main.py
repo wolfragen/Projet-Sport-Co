@@ -193,7 +193,7 @@ if(__name__ == "__main__"):
         num_episodes = 5000,
         save_path = save_folder,
         interval_notify = 100,
-        opponent_save_interval = 50,
+        opponent_save_interval = 100,
         max_pool_size = 10,
         draw_penalty = 0,
         max_steps_per_game = 2048,

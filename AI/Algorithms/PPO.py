@@ -732,6 +732,7 @@ def train_PPO_competitive_full_games(
     total_steps = 0
     reward_sums = {}  
     num_game = 0
+    total_models = 0
 
     state = env.getState(0)
     step_in_game = 0
@@ -875,6 +876,10 @@ def train_PPO_competitive_full_games(
 
             if len(opponent_pool) > max_pool_size:
                 opponent_pool.pop(0)
+            
+            # Save model for safety issue
+            model.save(actor_path = save_path+f"actor_{total_models}.pt", critic=True, critic_path= save_path+"critic.pt")
+            total_models += 1
 
 
         # -------------------------
@@ -925,7 +930,7 @@ def train_PPO_competitive_full_games(
             )
 
     print("Saving final model...")
-    model.save(os.path.join(save_path, "model.pt"))
+    model.save(actor_path = save_path+f"actor_{total_models}.pt", critic=True, critic_path= save_path+"critic.pt")
     print("Self-play training finished.")
     
     
