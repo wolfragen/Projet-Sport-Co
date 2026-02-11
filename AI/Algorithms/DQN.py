@@ -471,6 +471,9 @@ def runTests(players_number, agents, scoring_function, reward_coeff_dict, max_st
     nb_not_draw = 0
     score_left = 0
     score_right = 0
+    nb_non_draw = 0
+    
+    start_time = time.time()
     
     for episode in range(nb_tests):
         
@@ -487,6 +490,8 @@ def runTests(players_number, agents, scoring_function, reward_coeff_dict, max_st
         
         if(score[0] != 1):
             nb_fail += 1
+        if(score[0] != 0 or score[1] != 0):
+            nb_non_draw += 1
         
         if((episode+1)%(nb_tests/10) == 0 and should_print):
             print(f"Tests en cours: {(episode+1)/nb_tests*100}%")

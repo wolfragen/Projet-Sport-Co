@@ -12,6 +12,7 @@ import copy
 import random
 import os
 from collections import deque
+import re
 
 
 # =========================
@@ -268,18 +269,18 @@ class PPOAgent:
         logger.log(text = f"normalize_advantage: {self.normalize_advantage}")
         logger.log(text = f"max_grad_norm: {self.max_grad_norm}")
         logger.log(text = f"cuda: {self.device}")
-    
-    def save(self, path, save_all = False):
-        if save_all:
-            torch.save(self.actor.state_dict(), path[:-3] + "_actor.pt")
-            torch.save(self.actor.state_dict(), path[:-3] + "_critic.pt")
-        torch.save(self.actor.state_dict(), path)
 
-    def load(self, path, load_all = False):
-        if load_all:
-            self.actor.load_state_dict(torch.load(path[:-3] + "_actor.pt", map_location=self.device))
-            self.critic.load_state_dict(torch.load(path[:-3] + "_critic.pt", map_location=self.device))
-        self.actor.load_state_dict(torch.load(path, map_location=self.device))
+    def save(self, actor_path, critic=False, critic_path=None):
+        torch.save(self.actor.state_dict(), actor_path)
+        if(critic):
+            assert critic_path is not None
+            torch.save(self.critic.state_dict(), critic_path)
+
+    def load(self, actor_path, critic=False, critic_path=None):
+        self.actor.load_state_dict(torch.load(actor_path, map_location=self.device))
+        if(critic):
+            assert critic_path is not None
+            self.critic.load_state_dict(torch.load(critic_path, map_location=self.device))
 
 def train_PPO_model(
     model : PPOAgent,
@@ -422,6 +423,8 @@ def train_PPO_competitive(
     save_all_models = False,
     log = False,
     model_name = "model",
+    load_existing=False,
+    load_path=None,
 ):
     """
     Train a PPO agent using competitive self-play with an opponent pool.
@@ -442,6 +445,53 @@ def train_PPO_competitive(
 
     # Initial opponent (episode 0 snapshot)
     opponent_pool.append(clone_opponent(model))
+    
+    if(load_existing):
+        assert load_path is not None
+        # Get all files in directory
+        files = os.listdir(load_path)
+    
+        # Extract actor checkpoints with their index
+        actor_pattern = re.compile(r"actor_(\d+)\.pt")
+    
+        actors = []
+        for f in files:
+            match = actor_pattern.match(f)
+            if match:
+                idx = int(match.group(1))
+                actors.append((idx, f))
+    
+        assert len(actors) > 0, "No actor checkpoints found."
+    
+        # Sort actors by index
+        actors.sort(key=lambda x: x[0])
+    
+        # -----------------------------
+        # Load latest actor
+        # -----------------------------
+        last_actor_idx, last_actor_file = actors[-1]
+        last_actor_path = os.path.join(load_path, last_actor_file)
+    
+        # -----------------------------
+        # Load critic
+        # -----------------------------
+        critic_path = os.path.join(load_path, "critic.pt")
+        assert os.path.exists(critic_path), "critic.pt not found."
+        model.load(actor_path=last_actor_path, critic=True, critic_path=critic_path)
+    
+        # -----------------------------
+        # Load past max_pool_size actors (excluding latest)
+        # -----------------------------
+        previous_actors = actors[:-1]  # remove latest
+        pool_candidates = previous_actors[-max_pool_size:]  # take last max_pool_size
+    
+        opponent_pool = []
+        for idx, filename in pool_candidates:
+            path = os.path.join(load_path, filename)
+            opponent_pool.append(torch.load(path))
+    
+        print(f"Loaded latest actor: actor_{last_actor_idx}.pt")
+        print(f"Loaded {len(opponent_pool)} previous actors for pool")
 
     # Random agent for evaluation
     random_agent = RandomAgent(action_dim=4)
@@ -477,6 +527,8 @@ def train_PPO_competitive(
     mean_steps.append(max_steps_per_game)
     total_steps_for_mean = 0
     games_played_for_mean = 0
+    
+    total_models = 0
 
     # =========================
     # Training loop
@@ -498,7 +550,7 @@ def train_PPO_competitive(
         elif r < 1.1:
             opponent = random.choice(opponent_pool) # random, 20% -> TODO 30% pour l'instant
         else:
-            opponent = None                       # solo-play 10%
+            opponent = None                         # solo-play 10%
 
         if opponent is None : 
             env = LearningEnvironment(
@@ -595,6 +647,10 @@ def train_PPO_competitive(
             opponent_pool.append(clone_opponent(model))
             if len(opponent_pool) > max_pool_size:
                 opponent_pool.pop(0)
+            
+            # Save model for safety issue
+            model.save(actor_path = save_path+f"actor_{total_models}.pt", critic=True, critic_path= save_path+"critic.pt")
+            total_models += 1
 
         # -------------------------
         # Training diagnostics
