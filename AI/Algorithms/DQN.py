@@ -490,7 +490,7 @@ def runTests(players_number, agents, scoring_function, reward_coeff_dict, max_st
         
         if((episode+1)%(nb_tests/10) == 0 and should_print):
             print(f"Tests en cours: {(episode+1)/nb_tests*100}%")
-    txt = f"{nb_tests} tests | Reward: {rewards/(nb_not_draw + 1e-8):.2f} | Steps (mean): {steps/(nb_not_draw + 1e-8):2f} | Score: {score_left/nb_tests:.2f} / {score_right/nb_tests:.2f} | failed: {nb_fail/nb_tests:.3f}"
+    txt = f"{nb_tests} tests | Reward: {rewards/(nb_not_draw + 1e-8):.2f} | Steps (mean): {steps/(nb_not_draw + 1e-8):.2f} | Score: {score_left/nb_tests:.2f} / {score_right/nb_tests:.2f} | failed: {nb_fail/nb_tests:.3f}"
     print(txt)
     if logger != None: logger.log(text = txt)
     return rewards/nb_tests, np.median(steps), np.mean(steps), score_left/nb_tests, score_right/nb_tests, nb_fail/nb_tests
