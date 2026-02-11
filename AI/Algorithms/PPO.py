@@ -424,7 +424,9 @@ def train_PPO_competitive(
         opponent_pool = []
         for idx, filename in pool_candidates:
             path = os.path.join(load_path, filename)
-            opponent_pool.append(torch.load(path))
+            opp = clone_opponent(model)
+            opp.load(actor_path=path)
+            opponent_pool.append(opp)
     
         print(f"Loaded latest actor: actor_{last_actor_idx}.pt")
         print(f"Loaded {len(opponent_pool)} previous actors for pool")
