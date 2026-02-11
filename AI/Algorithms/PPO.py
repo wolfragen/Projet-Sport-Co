@@ -211,11 +211,17 @@ class PPOAgent:
     def act(self, state, train=False):
         return self.actor.act(state, train=False)
 
-    def save(self, path):
-        torch.save(self.actor.state_dict(), path)
+    def save(self, actor_path, critic=False, critic_path=None):
+        torch.save(self.actor.state_dict(), actor_path)
+        if(critic):
+            assert critic_path is not None
+            torch.save(self.critic.state_dict(), critic_path)
 
-    def load(self, path):
-        self.actor.load_state_dict(torch.load(path, map_location=self.device))
+    def load(self, actor_path, critic=False, critic_path=None):
+        self.actor.load_state_dict(torch.load(actor_path, map_location=self.device))
+        if(critic):
+            assert critic_path is not None
+            self.critic.load_state_dict(torch.load(critic_path, map_location=self.device))
 
 def train_PPO_model(
     model : PPOAgent,
@@ -394,6 +400,8 @@ def train_PPO_competitive(
     mean_steps.append(max_steps_per_game)
     total_steps_for_mean = 0
     games_played_for_mean = 0
+    
+    total_models = 0
 
     # =========================
     # Training loop
@@ -510,6 +518,10 @@ def train_PPO_competitive(
             opponent_pool.append(clone_opponent(model))
             if len(opponent_pool) > max_pool_size:
                 opponent_pool.pop(0)
+            
+            # Save model for safety issue
+            model.save(actor_path = save_path+f"actor_{total_models}.pt", critic=True, critic_path= save_path+"critic.pt")
+            total_models += 1
 
         # -------------------------
         # Training diagnostics
@@ -554,7 +566,7 @@ def train_PPO_competitive(
             )
 
     print("Saving final model...")
-    model.save(os.path.join(save_path, "model.pt"))
+    model.save(actor_path = save_path+f"actor_{total_models}.pt", critic=True, critic_path= save_path+"critic.pt")
     print("Self-play training finished.")
     
     
