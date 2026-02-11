@@ -11,6 +11,7 @@ import copy
 import random
 import os
 from collections import deque
+import re
 
 
 # =========================
@@ -471,6 +472,8 @@ def train_PPO_competitive(
     draw_penalty: float = -0.5,
     max_steps_per_game: int = 2048,
     eval_interval: int = 500,
+    load_existing=False,
+    load_path=None,
 ):
     """
     Train a PPO agent using competitive self-play with an opponent pool.
@@ -483,6 +486,67 @@ def train_PPO_competitive(
         reward_coeff_dict=model.reward_coeff_dict,
         human=False
     )
+
+    # -------------------------
+    # Opponent pool utilities
+    # -------------------------
+    opponent_pool = []
+
+    # Initial opponent (episode 0 snapshot)
+    opponent_pool.append(clone_opponent(model))
+    
+    if(load_existing):
+        assert load_path is not None
+        # Get all files in directory
+        files = os.listdir(load_path)
+    
+        # Extract actor checkpoints with their index
+        actor_pattern = re.compile(r"actor_(\d+)\.pt")
+    
+        actors = []
+        for f in files:
+            match = actor_pattern.match(f)
+            if match:
+                idx = int(match.group(1))
+                actors.append((idx, f))
+    
+        assert len(actors) > 0, "No actor checkpoints found."
+    
+        # Sort actors by index
+        actors.sort(key=lambda x: x[0])
+    
+        # -----------------------------
+        # Load latest actor
+        # -----------------------------
+        last_actor_idx, last_actor_file = actors[-1]
+        last_actor_path = os.path.join(load_path, last_actor_file)
+    
+        # -----------------------------
+        # Load critic
+        # -----------------------------
+        critic_path = os.path.join(load_path, "critic.pt")
+        assert os.path.exists(critic_path), "critic.pt not found."
+        model.load(actor_path=last_actor_path, critic=True, critic_path=critic_path)
+    
+        # -----------------------------
+        # Load past max_pool_size actors (excluding latest)
+        # -----------------------------
+        previous_actors = actors[:-1]  # remove latest
+        pool_candidates = previous_actors[-max_pool_size:]  # take last max_pool_size
+    
+        opponent_pool = []
+        for idx, filename in pool_candidates:
+            path = os.path.join(load_path, filename)
+            opponent_pool.append(torch.load(path))
+    
+        print(f"Loaded latest actor: actor_{last_actor_idx}.pt")
+        print(f"Loaded {len(opponent_pool)} previous actors for pool")
+
+    # Random agent for evaluation
+    random_agent = RandomAgent(action_dim=4)
+
+    print(f"Starting PPO self-play with opponent pool ({num_episodes} episodes)")
+    start_time = time.time()
 
     # -------------------------
     # Training statistics
@@ -528,7 +592,7 @@ def train_PPO_competitive(
         if len(opponent_pool) == 0:
             opponent = clone_opponent(model)
         else:
-            opponent = random.choice(opponent_pool)
+            opponent = None                         # solo-play 10%
 
         if opponent is None : 
             env = LearningEnvironment(
