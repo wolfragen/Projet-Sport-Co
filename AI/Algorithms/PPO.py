@@ -454,7 +454,7 @@ def runTests(
         "avg_score_1": score_1 / nb_tests,
     }
 
-def train_PPO_competitive(
+def train_PPO_1v1_competitive(
     model: PPOAgent,
     max_duration: int,
     num_episodes: int,
