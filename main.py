@@ -16,7 +16,7 @@ import pandas as pd
 import Settings
 from Play import humanGame, debugGame
 from AI.Algorithms.DQN import getRandomDQNAgents, dqn_train
-from AI.Algorithms.PPO import PPOAgent, train_PPO_model, train_PPO_competitive, runTests
+from AI.Algorithms.PPO import PPOAgent, train_PPO_model, train_PPO_competitive, runTests, train_PPO_competitive_full_games
 #from AI.Algorithms.NEAT import neat_train
 from AI.Rewards.Reward import computeReward
 from AI.Algorithms.RANDOM import RandomAgent
@@ -187,10 +187,23 @@ if(__name__ == "__main__"):
     #     max_pool_size = 10
     # )
 
-    agent.load(save_folder + "model.pt")
-    agent2.load(save_folder + "model_Alex.pt")
-    random_agent = RandomAgent(action_dim=4)
-    agents = [agent, agent2]
+    train_PPO_competitive_full_games(
+        model = agent,
+        max_duration = 3600*2,
+        num_episodes = 5000,
+        save_path = save_folder,
+        interval_notify = 100,
+        opponent_save_interval = 50,
+        max_pool_size = 10,
+        draw_penalty = 0,
+        max_steps_per_game = 2048,
+        eval_interval = 500,
+    )
+
+    # agent.load(save_folder + "model.pt")
+    # agent2.load(save_folder + "model_Alex.pt")
+    # random_agent = RandomAgent(action_dim=4)
+    # agents = [agent, agent2]
     # runTests(
     #             players_number=(1, 1),
     #             agents=agents,
@@ -201,9 +214,9 @@ if(__name__ == "__main__"):
     #             nb_tests=1000,
     #             should_print=True
     #         )
-    #agents = [agent]
+    agents = [agent]
     players_number = (1,1)
-    debugGame(players_number, agents, scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict, human=False, max_steps=2048)
+    debugGame(players_number, agents, scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict, human=True, max_steps=2048)
     
     ##################################################################################################################################################################
     

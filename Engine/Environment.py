@@ -45,7 +45,7 @@ class LearningEnvironment():
             self.phantom_player = {"position_x": Settings.SCREEN_OFFSET + randint(Settings.PLAYER_LEN, Settings.DIM_X-Settings.PLAYER_LEN), 
                                "position_y": Settings.SCREEN_OFFSET + randint(Settings.PLAYER_LEN, Settings.DIM_Y-Settings.PLAYER_LEN)}
         
-        self.prev_score = np.zeros(2)
+        self.previous_score = np.zeros(2)
         self._init_game()
         if(display):
             self._initDisplay(simulation_speed)
@@ -101,7 +101,7 @@ class LearningEnvironment():
             self.left_goal_position,
             self.right_goal_position,
             self.score,
-            self.prev_score,
+            self.previous_score,
             self.training_progression,
             debug
         )

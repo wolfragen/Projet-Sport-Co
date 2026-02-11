@@ -15,7 +15,7 @@ def sigmoid(x):
     return 1/(1+math.exp(-x))
 
 
-def computeReward(coeff_dict, player, action, ball, left_goal_position, right_goal_position, score, previous_score, mean_steps, training_progression=0.0, debug=False):
+def computeReward(coeff_dict, player, action, ball, left_goal_position, right_goal_position, score, previous_score, mean_steps, training_progression=0.0, debug=True):
         
     body, shape = player
     ball_body, ball_shape = ball
