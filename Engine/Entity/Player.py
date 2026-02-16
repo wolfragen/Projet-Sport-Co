@@ -22,7 +22,7 @@ def buildPlayers(space, players_number: list[int,int], human: bool = False, phan
     size = Settings.PLAYER_LEN
     mass = Settings.PLAYER_MASS
 
-    def create_square(pos: tuple[float, float], angle: float, left_team: bool) -> tuple[pymunk.Body, pymunk.Poly]:
+    def create_square(pos: tuple[float, float], angle: float, left_team: bool, player_id: int) -> tuple[pymunk.Body, pymunk.Poly]:
         """
         Helper function to create a square player with given position, angle, and team.
         """
@@ -33,6 +33,7 @@ def buildPlayers(space, players_number: list[int,int], human: bool = False, phan
         body.previous_position = pos
         body.angle = angle
         body.canShoot = False
+        body.player_id = player_id
         
         if(Settings.RANDOM_PLAYER_INIT):
             body.angle = random() * 2*np.pi
@@ -110,20 +111,24 @@ def buildPlayers(space, players_number: list[int,int], human: bool = False, phan
     right_players = []
     
     left_positions = spacing(n_left, size, offset, offset, dim_x/2, dim_y)
+    nb_players_done = 0
 
     for i in range(n_left):
         pos = left_positions[i]
-        left_players.append(create_square(pos.tolist(), angle=0, left_team=True))
+        left_players.append(create_square(pos.tolist(), angle=0, left_team=True, player_id=nb_players_done))
+        nb_players_done += 1
         
     if(n_right != 0):
         right_positions = spacing(n_right, size, dim_x/2+offset, offset, dim_x/2, dim_y, revert_x=True)
         for i in range(n_right):
             pos = right_positions[-i]
-            right_players.append(create_square(pos.tolist(), angle=np.pi, left_team=False))
+            right_players.append(create_square(pos.tolist(), angle=np.pi, left_team=False, player_id=nb_players_done))
+            nb_players_done += 1
             
     if(phantom_player is not None):
         pos = [phantom_player["position_x"], phantom_player["position_y"]]
-        right_players.append(create_square(pos, angle=np.pi, left_team=False))
+        right_players.append(create_square(pos, angle=np.pi, left_team=False, player_id=nb_players_done))
+        nb_players_done += 1
 
     # Flatten the lists
     left_flat = [item for pair in left_players for item in pair]

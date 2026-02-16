@@ -35,6 +35,7 @@ def buildBall(space):
             offset + dim_y / 2
         )  # center of the field
     body.previous_position = body.position
+    body.last_player_shoot = None
 
     # Circle shape for the ball
     shape = pymunk.Circle(body, radius)
