@@ -158,7 +158,7 @@ def _ppo_competitive_worker(
                 elif env.score[0] < env.score[1]:
                     stats["losses"] += 1
                 else:
-                    stats["losses"] += 1
+                    stats["draws"] += 1
     
                 stats["score_0"] += env.score[0]
                 stats["score_1"] += env.score[1]
