@@ -187,6 +187,7 @@ class EpisodeResult:
     score: tuple[int,int]
     success: bool
     display: bool
+    total_reward_dict: dict
 
 def trainingGame(players_number, agents, scoring_function, reward_coeff_dict, max_steps, training_progression, train=True, 
                  display=False, simulation_speed=1.0, screen=None, draw_options=None, gather_data=False):
@@ -435,6 +436,15 @@ def testingGame(players_number, agents, scoring_function, reward_coeff_dict, max
     done = False
     
     total_reward = 0
+    total_reward_dict = {
+        "static_reward": 0,
+        "delta_ball_goal_reward": 0,
+        "delta_ball_player_reward": 0,
+        "can_shoot_reward": 0,
+        "has_ball_reward": 0,
+        "goal_reward": 0,
+        "total_reward": 0,
+        }
     actions = [[] for _ in range(n_players)]
     
     while(not done):
@@ -448,24 +458,37 @@ def testingGame(players_number, agents, scoring_function, reward_coeff_dict, max
             states[player_id] = state
             actions[player_id].append(action)
         
-        rewards = env.step()
+        rewards = env.step(debug=True)
         done = (env.isDone() or step>=max_steps)
         
         for player_id in range(n_players):
             state = states[player_id]
             next_state = env.getState(player_id)
             action = actions[player_id][step-1]
-            reward = rewards[player_id]
+            reward = rewards[player_id][0]
             
             states[player_id] = next_state
             total_reward += reward
             
+            reward_dict = rewards[player_id][1]
+            for key,value in reward_dict.items():
+                total_reward_dict[key] += value
+            
         step += 1
-    return EpisodeResult(total_reward=total_reward, actions=actions, steps=step-1, score=env.score, success=env.isDone(), display=env.display)
+    return EpisodeResult(total_reward=total_reward, actions=actions, steps=step-1, score=env.score, success=env.isDone(), display=env.display, total_reward_dict=total_reward_dict)
 
 def runTests(players_number, agents, scoring_function, reward_coeff_dict, max_steps, training_progression=1.0, nb_tests=10_000, should_print=True, logger: Logger=None):
     
     rewards = 0
+    rewards_dict = {
+        "static_reward": 0,
+        "delta_ball_goal_reward": 0,
+        "delta_ball_player_reward": 0,
+        "can_shoot_reward": 0,
+        "has_ball_reward": 0,
+        "goal_reward": 0,
+        "total_reward": 0,
+        }
     steps = 0
     nb_fail = 0
     nb_not_draw = 0
@@ -487,6 +510,10 @@ def runTests(players_number, agents, scoring_function, reward_coeff_dict, max_st
             steps += result.steps
             score_left += score[0]
             score_right += score[1]
+            
+            reward_dict = result.total_reward_dict
+            for key,value in reward_dict.items():
+                rewards_dict[key] += value
         
         if(score[0] != 1):
             nb_fail += 1
@@ -494,11 +521,16 @@ def runTests(players_number, agents, scoring_function, reward_coeff_dict, max_st
             nb_non_draw += 1
         
         if((episode+1)%(nb_tests/10) == 0 and should_print):
-            print(f"Tests en cours: {(episode+1)/nb_tests*100}%")
-    txt = f"{nb_tests} tests | Reward: {rewards/(nb_not_draw + 1e-8):.2f} | Steps (mean): {steps/(nb_not_draw + 1e-8):.2f} | Score: {score_left/nb_tests:.2f} / {score_right/nb_tests:.2f} | failed: {nb_fail/nb_tests:.3f}"
-    print(txt)
-    if logger != None: logger.log(text = txt)
-    return rewards/nb_tests, np.median(steps), np.mean(steps), score_left/nb_tests, score_right/nb_tests, nb_fail/nb_tests
+            print(f"[{round(time.time() - start_time)}s] Tests en cours: {(episode+1)/nb_tests*100}%")
+            
+    
+    print(f"{nb_tests} tests | Reward: {rewards/nb_non_draw:.2f} | Steps: {steps/nb_non_draw:.1f} | Score: {score_left/nb_tests:.2f} / {score_right/nb_tests:.2f} | failed: {nb_fail/nb_tests:.3f}")
+    for key,value in rewards_dict.items():
+        new_val = value/nb_non_draw
+        rewards_dict[key] = new_val
+        print(f"| {key}: {new_val:.2f}", end="")
+    print()
+    return rewards/nb_non_draw, steps/nb_non_draw, score_left/nb_tests, score_right/nb_tests, nb_fail/nb_tests, rewards_dict
 
 
 

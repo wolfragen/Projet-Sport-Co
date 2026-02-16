@@ -114,6 +114,8 @@ def shoot(player: tuple[pymunk.Body, pymunk.Shape],
     # Apply velocity to the ball in the player's facing direction
     move(ball, speed=shooting_speed)
     
+    ball_body.last_player_shoot = player_body.player_id
+    
     return
         
 def canShoot(player_body: pymunk.Body,

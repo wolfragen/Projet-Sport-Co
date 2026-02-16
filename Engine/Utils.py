@@ -76,7 +76,10 @@ def checkPlayersCanShoot(players, ball):
     for player in players:
         player_body = player[0]
         player_body.hadBall = player_body.canShoot
-        player_body.canShoot = canShoot(player_body, ball_body)
+        can_shoot = canShoot(player_body, ball_body)
+        player_body.canShoot = can_shoot
+        if can_shoot and player_body.player_id != ball_body.last_player_shoot: 
+            ball_body.last_player_shoot = None
     return
 
 

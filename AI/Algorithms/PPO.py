@@ -435,6 +435,8 @@ def train_PPO_competitive(
         reward_coeff_dict=model.reward_coeff_dict,
         human=False
     )
+    
+    total_models = 0
 
     # -------------------------
     # Opponent pool utilities
@@ -443,6 +445,7 @@ def train_PPO_competitive(
 
     # Initial opponent (episode 0 snapshot)
     opponent_pool.append(clone_opponent(model))
+    max_idx = 0
     
     if(load_existing):
         assert load_path is not None
@@ -457,12 +460,14 @@ def train_PPO_competitive(
             match = actor_pattern.match(f)
             if match:
                 idx = int(match.group(1))
+                if(idx>max_idx): max_idx = idx
                 actors.append((idx, f))
-    
         assert len(actors) > 0, "No actor checkpoints found."
     
         # Sort actors by index
         actors.sort(key=lambda x: x[0])
+        if("actor_final.pt" in files):
+            actors.append(("final","actor_final.pt"))
     
         # -----------------------------
         # Load latest actor
@@ -486,7 +491,11 @@ def train_PPO_competitive(
         opponent_pool = []
         for idx, filename in pool_candidates:
             path = os.path.join(load_path, filename)
-            opponent_pool.append(torch.load(path))
+            opp = clone_opponent(model)
+            opp.load(actor_path=path)
+            opponent_pool.append(opp)
+            
+        total_models = max_idx+1
     
         print(f"Loaded latest actor: actor_{last_actor_idx}.pt")
         print(f"Loaded {len(opponent_pool)} previous actors for pool")
@@ -526,7 +535,6 @@ def train_PPO_competitive(
     total_steps_for_mean = 0
     games_played_for_mean = 0
     
-    total_models = 0
 
     # =========================
     # Training loop
@@ -690,19 +698,9 @@ def train_PPO_competitive(
                 logger= logger if log else None
             )
 
-    txt = "Saving final model..."
-    print(txt)
-    if log: logger.log(text = txt)
-
-    model.save(os.path.join(save_path, f"actor_{total_models}.pt"), 
-                    critic=save_all, 
-                    critic_path=os.path.join(save_path, f"critic.pt") if save_all else None)
-
-    txt = "Self-play training finished."
-    print(txt)
-    if log: logger.log(text = txt)
-    logger.close()
-    
+    print("Saving final model...")
+    model.save(actor_path = save_path+"actor_final.pt", critic=True, critic_path= save_path+"critic.pt")
+    print("Self-play training finished.")
     
     
 def train_PPO_competitive_full_games(

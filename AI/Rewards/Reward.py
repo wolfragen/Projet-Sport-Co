@@ -59,7 +59,7 @@ def computeReward(coeff_dict, player, action, ball, left_goal_position, right_go
         
     can_shoot_reward = 0
     if(can_shoot_coeff is not None):
-        can_shoot_reward = get_shooting_reward(action, body, ball_body, shape, left_goal_position, right_goal_position, can_shoot_coeff)
+        can_shoot_reward = get_shooting_reward(action, body, ball_body, shape, left_goal_position, right_goal_position, can_shoot_coeff, score, previous_score)
     
     has_ball_reward = 0
     if(has_ball_coeff is not None):
@@ -68,7 +68,7 @@ def computeReward(coeff_dict, player, action, ball, left_goal_position, right_go
     reward = (static_reward + delta_ball_goal_reward + delta_ball_player_reward + can_shoot_reward + has_ball_reward + 
               goal_reward)
 
-    if(debug):
+    if(debug): # Attention, reward_dict noté en brut dans DQN => testing game et runtests
         reward_dict = {
             "static_reward": static_reward,
             "delta_ball_goal_reward": delta_ball_goal_reward,
@@ -163,7 +163,15 @@ def get_has_ball_reward(action, body, has_ball_coeff):
         return -has_ball_coeff
     return 0
         
-def get_shooting_reward(action, body, ball_body, shape, left_goal_position, right_goal_position, can_shoot_coeff):
+def get_shooting_reward(action, body, ball_body, shape, left_goal_position, 
+                        right_goal_position, can_shoot_coeff, score, previous_score):
+    
+    if(ball_body.last_player_shoot == body.player_id):
+        if(score[0]>previous_score[0] and shape.left_team):
+            return can_shoot_coeff*2
+        elif(score[1]>previous_score[1] and not shape.left_team):
+            return can_shoot_coeff*2
+    
     if isinstance(action, np.ndarray):
         is_shoot = float(action[2]) > 0.1
     else:
