@@ -65,8 +65,10 @@ class LearningEnvironment():
         dt = Settings.DELTA_TIME/Settings.DELTA_SIMU
         for _ in range(Settings.DELTA_SIMU):
             space.step(dt/1000)
-
+        
+        temp_id = self.ball[0].last_player_shoot
         self._checkIfDone()
+        self.ball[0].last_player_shoot = temp_id
         
         reset_movements(self.players)
         checkPlayersCanShoot(self.players, self.ball)
