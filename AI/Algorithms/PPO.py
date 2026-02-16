@@ -420,9 +420,7 @@ def train_PPO_competitive(
     max_steps_per_game: int = 2048,
     eval_interval: int = 500,
     save_all = False,
-    save_all_models = False,
     log = False,
-    model_name = "model",
     load_existing=False,
     load_path=None,
 ):
@@ -498,7 +496,7 @@ def train_PPO_competitive(
 
     # Logger
     if log:
-        logger = Logger(os.path.join(save_path, f"{model_name}.txt"))
+        logger = Logger(os.path.join(save_path, f"log.txt"))
         logger.log("Parameters:")
         model.log_params(logger)
         logger.log(text = f"opponent_save_interval: {opponent_save_interval}")
@@ -676,13 +674,6 @@ def train_PPO_competitive(
         # -------------------------
         if episode % eval_interval == 0:
 
-            model_file_name = f"{model_name}_{episode//eval_interval}" if save_all_models else model_name
-            txt = f">>> Checkpoint reached, saving model {model_file_name}..."
-            print(txt)
-            if log: logger.log(text = txt)
-
-            model.save(os.path.join(save_path, f"{model_file_name}.pt"), save_all=save_all)
-
             txt = ">>> Evaluating vs random agent..."
             print(txt)
             if log: logger.log(text = txt)
@@ -703,15 +694,15 @@ def train_PPO_competitive(
     print(txt)
     if log: logger.log(text = txt)
 
-    if save_all_models:
-        model.save(os.path.join(save_path, f"{model_name}_final.pt"),save_all=save_all)
-    else:
-        model.save(os.path.join(save_path, f"{model_name}.pt"),save_all=save_all)
+    model.save(os.path.join(save_path, f"actor_{total_models}.pt"), 
+                    critic=save_all, 
+                    critic_path=os.path.join(save_path, f"critic.pt") if save_all else None)
 
     txt = "Self-play training finished."
     print(txt)
     if log: logger.log(text = txt)
     logger.close()
+    
     
     
 def train_PPO_competitive_full_games(
@@ -950,11 +941,13 @@ def train_PPO_competitive_full_games(
         # -------------------------
         if episode % eval_interval == 0:
             model_file_name = f"{model_name}_{episode//eval_interval}" if save_all_models else model_name
-            txt = f">>> Checkpoint reached, saving model {model_file_name}..."
+            txt = f">>> Checkpoint reached, saving {model_file_name}..."
             print(txt)
             if log: logger.log(text = txt)
 
-            model.save(os.path.join(save_path, f"{model_file_name}.pt"), save_all=save_all)
+            model.save(os.path.join(save_path, f"{model_file_name}_actor.pt"), 
+                       critic=save_all, 
+                       critic_path=os.path.join(save_path, f"{model_file_name}_critic.pt") if save_all else None)
 
             txt = ">>> Evaluating vs random agent..."
             print(txt)
@@ -976,9 +969,13 @@ def train_PPO_competitive_full_games(
     if log: logger.log(text = txt)
 
     if save_all_models:
-        model.save(os.path.join(save_path, f"{model_name}_final.pt"),save_all=save_all)
+        model.save(os.path.join(save_path, f"{model_file_name}_actor_final.pt"), 
+                       critic=save_all, 
+                       critic_path=os.path.join(save_path, f"{model_file_name}_critic_final.pt") if save_all else None)
     else:
-        model.save(os.path.join(save_path, f"{model_name}.pt"),save_all=save_all)
+        model.save(os.path.join(save_path, f"{model_file_name}_actor.pt"), 
+                       critic=save_all, 
+                       critic_path=os.path.join(save_path, f"{model_file_name}_critic.pt") if save_all else None)
 
     txt = "Self-play training finished."
     print(txt)
