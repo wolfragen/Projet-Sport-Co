@@ -6,7 +6,6 @@ from AI.Network import DeepRLNetwork
 from Engine.Environment import LearningEnvironment
 from AI.Algorithms.DQN import runTests
 from AI.Algorithms.RANDOM import RandomAgent
-from logger import Logger
 
 import copy
 import random
@@ -251,24 +250,6 @@ class PPOAgent:
 
     def act(self, state, train=False):
         return self.actor.act(state, train=False)
-    
-    def log_params(self, logger: Logger):
-        logger.log(text = f"dimension_actor: {self.dimension_actor}")
-        logger.log(text = f"dimension_critic: {self.dimension_critic}")
-        logger.log(text = f"reward_coeff_dict: {self.reward_coeff_dict}")
-        logger.log(text = f"rollout_size: {self.rollout_size}")
-        logger.log(text = f"lr_actor: {self.lr_actor}") 
-        logger.log(text = f"lr_critic: {self.lr_critic}") 
-        logger.log(text = f"n_epoch: {self.n_epoch}")
-        logger.log(text = f"lr_decay: {self.lr_decay}") 
-        logger.log(text = f"clip_eps: {self.clip_eps}") 
-        logger.log(text = f"gamma: {self.gamma}") 
-        logger.log(text = f"lmbda: {self.lmbda}")
-        logger.log(text = f"critic_loss_coeff: {self.critic_loss_coeff}")
-        logger.log(text = f"entropy_loss_coeff: {self.entropy_loss_coeff}")
-        logger.log(text = f"normalize_advantage: {self.normalize_advantage}")
-        logger.log(text = f"max_grad_norm: {self.max_grad_norm}")
-        logger.log(text = f"cuda: {self.device}")
 
     def save(self, actor_path, critic=False, critic_path=None):
         torch.save(self.actor.state_dict(), actor_path)
@@ -419,8 +400,6 @@ def train_PPO_competitive(
     draw_penalty: float = -0.5,
     max_steps_per_game: int = 2048,
     eval_interval: int = 500,
-    save_all = False,
-    log = False,
     load_existing=False,
     load_path=None,
 ):
@@ -503,20 +482,8 @@ def train_PPO_competitive(
     # Random agent for evaluation
     random_agent = RandomAgent(action_dim=4)
 
-    # Logger
-    if log:
-        logger = Logger(os.path.join(save_path, f"log.txt"))
-        logger.log("Parameters:")
-        model.log_params(logger)
-        logger.log(text = f"opponent_save_interval: {opponent_save_interval}")
-        logger.log(text = f"max_pool_size: {max_pool_size}")
-        logger.log(text = f"draw_penalty: {draw_penalty}")
-        logger.log(text = f"max_steps_per_game: {max_steps_per_game}")
-        logger.log(text = "********************")
+    print(f"Starting PPO self-play with opponent pool ({num_episodes} episodes)")
 
-    txt = f"Starting PPO self-play with opponent pool ({num_episodes} episodes)"
-    print(txt)
-    if log: logger.log(text = txt)
     start_time = time.time()
 
     # -------------------------
@@ -542,9 +509,7 @@ def train_PPO_competitive(
     for episode in range(1, num_episodes + 1):
 
         if time.time() - start_time > max_duration:
-            txt = "Max training time reached."
-            print(txt)
-            if log: logger.log(text = txt)
+            print("Max training time reached.")
             break
 
         # ---- sample opponent
@@ -666,9 +631,7 @@ def train_PPO_competitive(
             avg_steps = total_steps / games_played if games_played > 0 else 0
             win_rate = wins / games_played if games_played > 0 else 0
 
-            txt = f"""[{int(time.time()-start_time)}s] Ep {episode} | Games {games_played} | W/D/L {wins}/{draws}/{losses} ({win_rate:.2f}) | Avg steps {avg_steps:.1f} ({sum(mean_steps)/len(mean_steps):.1f})| Score {score_0/games_played:.2f}-{score_1/games_played:.2f} | Reward {avg_reward:.4f} | Pool {len(opponent_pool)}"""
-            print(txt)
-            if log: logger.log(text = txt)
+            print(f"""[{int(time.time()-start_time)}s] Ep {episode} | Games {games_played} | W/D/L {wins}/{draws}/{losses} ({win_rate:.2f}) | Avg steps {avg_steps:.1f} ({sum(mean_steps)/len(mean_steps):.1f})| Score {score_0/games_played:.2f}-{score_1/games_played:.2f} | Reward {avg_reward:.4f} | Pool {len(opponent_pool)}""")
 
             # reset stats
             current_reward = 0.0
@@ -682,9 +645,7 @@ def train_PPO_competitive(
         # -------------------------
         if episode % eval_interval == 0:
 
-            txt = ">>> Evaluating vs random agent..."
-            print(txt)
-            if log: logger.log(text = txt)
+            print(">>> Evaluating vs random agent...")
 
             runTests(
                 players_number=(1, 1),
@@ -694,8 +655,7 @@ def train_PPO_competitive(
                 max_steps=max_steps_per_game,
                 training_progression=1.0,
                 nb_tests=100,
-                should_print=False,
-                logger= logger if log else None
+                should_print=False
             )
 
     print("Saving final model...")
@@ -717,7 +677,6 @@ def train_PPO_competitive_full_games(
     save_all: bool = False,
     save_all_models: bool = False,
     model_name: str = "model",
-    log: bool = False,
 ):
     """
     Train a PPO agent using competitive self-play with an opponent pool.
@@ -757,19 +716,7 @@ def train_PPO_competitive_full_games(
     # Random agent for evaluation
     random_agent = RandomAgent(action_dim=4)
 
-    if log:
-        logger = Logger(os.path.join(save_path, f"{model_name}.txt"))
-        logger.log("Parameters:")
-        model.log_params(logger)
-        logger.log(text = f"opponent_save_interval: {opponent_save_interval}")
-        logger.log(text = f"max_pool_size: {max_pool_size}")
-        logger.log(text = f"draw_penalty: {draw_penalty}")
-        logger.log(text = f"max_steps_per_game: {max_steps_per_game}")
-        logger.log(text = "********************")
-
-    txt = f"Starting PPO self-play with opponent pool ({num_episodes} episodes)"
-    print(txt)
-    if log: logger.log(text = txt)
+    print(f"Starting PPO self-play with opponent pool ({num_episodes} episodes)")
 
     start_time = time.time()
 
@@ -779,9 +726,7 @@ def train_PPO_competitive_full_games(
     for episode in range(1, num_episodes + 1):
 
         if time.time() - start_time > max_duration:
-            txt = "Max training time reached."
-            print(txt)
-            if log: logger.log(text = txt)
+            print("Max training time reached.")
             break
 
         # ---- select opponent (frozen)
@@ -913,18 +858,14 @@ def train_PPO_competitive_full_games(
 
             avg_reward_str = " | ".join([f"{k}: {v:.4f}" for k, v in avg_reward_components.items()])
 
-            txt = f"[{int(time.time()-start_time)}s] Ep {episode} | "\
+            print(f"[{int(time.time()-start_time)}s] Ep {episode} | "\
                 f"Games {games_played} | "\
                 f"W/D/L {wins}/{draws}/{losses} | "\
                 f"({win_rate:.2f}) | "\
                 f"Score {score_0/games_played:.2f}-{score_1/games_played:.2f} | "\
                 f"{avg_reward_str} | "\
-                f"Pool {len(opponent_pool)}"
+                f"Pool {len(opponent_pool)}")
             
-            print(txt)
-
-            if log: logger.log(txt)
-
             # reset stats
             current_reward = 0.0
             score_0 = score_1 = 0
@@ -939,17 +880,13 @@ def train_PPO_competitive_full_games(
         # -------------------------
         if episode % eval_interval == 0:
             model_file_name = f"{model_name}_{episode//eval_interval}" if save_all_models else model_name
-            txt = f">>> Checkpoint reached, saving {model_file_name}..."
-            print(txt)
-            if log: logger.log(text = txt)
+            print(f">>> Checkpoint reached, saving {model_file_name}...")
 
             model.save(os.path.join(save_path, f"{model_file_name}_actor.pt"), 
                        critic=save_all, 
                        critic_path=os.path.join(save_path, f"{model_file_name}_critic.pt") if save_all else None)
 
-            txt = ">>> Evaluating vs random agent..."
-            print(txt)
-            if log: logger.log(text = txt)
+            print(">>> Evaluating vs random agent...")
             runTests(
                 players_number=(1, 1),
                 agents=[model, random_agent],
@@ -959,12 +896,9 @@ def train_PPO_competitive_full_games(
                 training_progression=1.0,
                 nb_tests=100,
                 should_print=True,
-                logger=logger if log else None
             )
 
-    txt = "Saving final model..."
-    print(txt)
-    if log: logger.log(text = txt)
+    print("Saving final model...")
 
     if save_all_models:
         model.save(os.path.join(save_path, f"{model_file_name}_actor_final.pt"), 
@@ -975,10 +909,7 @@ def train_PPO_competitive_full_games(
                        critic=save_all, 
                        critic_path=os.path.join(save_path, f"{model_file_name}_critic.pt") if save_all else None)
 
-    txt = "Self-play training finished."
-    print(txt)
-    if log: logger.log(text = txt)
-    logger.close()
+    print("Self-play training finished.")
     
     
     

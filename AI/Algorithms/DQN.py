@@ -22,7 +22,6 @@ import pandas as pd
 from AI.Network import DeepRLNetwork
 from Graphics.GraphicEngine import startDisplay
 from Engine.Environment import LearningEnvironment
-from logger import Logger
 
 class DQNAgent:
     def __init__(self, dimensions, batch_size, lr, sync_rate, buffer_size, epsilon_decay, linear_decay=True, 
@@ -477,7 +476,7 @@ def testingGame(players_number, agents, scoring_function, reward_coeff_dict, max
         step += 1
     return EpisodeResult(total_reward=total_reward, actions=actions, steps=step-1, score=env.score, success=env.isDone(), display=env.display, total_reward_dict=total_reward_dict)
 
-def runTests(players_number, agents, scoring_function, reward_coeff_dict, max_steps, training_progression=1.0, nb_tests=10_000, should_print=True, logger: Logger=None):
+def runTests(players_number, agents, scoring_function, reward_coeff_dict, max_steps, training_progression=1.0, nb_tests=10_000, should_print=True):
     
     rewards = 0
     rewards_dict = {

@@ -18,14 +18,13 @@ from Engine.Environment import LearningEnvironment
 from AI.Algorithms.DQN import runTests
 from AI.Algorithms.PPO import PPOAgent
 from AI.Algorithms.RANDOM import RandomAgent
-from logger import Logger
 
 
 def load_previous_models(model: PPOAgent,
                load_path: str, 
                actors: list[PPOAgent],
-               max_pool_size: int,
-               logger: Logger | None = None):
+               max_pool_size: int
+               ):
     
     assert load_path is not None
     # Get all files in directory
@@ -69,15 +68,8 @@ def load_previous_models(model: PPOAgent,
         path = os.path.join(load_path, filename)
         opponent_pool.append(torch.load(path))
 
-    txt_1 = f"Loaded latest actor: actor_{last_actor_idx}.pt"
-    txt_2 = f"Loaded {len(opponent_pool)} previous actors for pool"
-    
-    if logger is not None:
-        logger.log(txt_1)
-        logger.log(txt_2)
-
-    print(txt_1)
-    print(txt_2)
+    print(f"Loaded latest actor: actor_{last_actor_idx}.pt")
+    print(f"Loaded {len(opponent_pool)} previous actors for pool")
 
 def _ppo_competitive_worker(
     model: PPOAgent,
@@ -199,7 +191,6 @@ def train_PPO_competitive_parallel(
     max_steps_per_game: int = 2048,
     eval_interval: int = 500,
     save_all = False,
-    log = False,
     load_existing=False,
     load_path=None,
     n_workers: int = -1,
@@ -219,24 +210,11 @@ def train_PPO_competitive_parallel(
     # Random agent for evaluation
     random_agent = RandomAgent(action_dim=4)
 
-    # Logger
-    if log:
-        logger = Logger(os.path.join(save_path, f"log.txt"))
-        logger.log("Parameters:")
-        model.log_params(logger)
-        logger.log(text = f"opponent_save_interval: {opponent_save_interval}")
-        logger.log(text = f"max_pool_size: {max_pool_size}")
-        logger.log(text = f"draw_penalty: {draw_penalty}")
-        logger.log(text = f"max_steps_per_game: {max_steps_per_game}")
-        logger.log(text = "********************")
-
     if(load_existing):
         actors = []
-        load_previous_models(model, load_path, actors, max_pool_size, logger)
+        load_previous_models(model, load_path, actors, max_pool_size)
 
-    txt = f"Starting PPO self-play with opponent pool ({num_episodes} episodes on {n_workers} threads)"
-    print(txt)
-    if log: logger.log(text = txt)
+    print(f"Starting PPO self-play with opponent pool ({num_episodes} episodes on {n_workers} threads)")
     start_time = time.time()
 
     mean_steps = deque(maxlen=100)
@@ -252,9 +230,7 @@ def train_PPO_competitive_parallel(
     for episode in range(1, num_episodes + 1):
 
         if time.time() - start_time > max_duration:
-            txt = "Max training time reached."
-            print(txt)
-            if log: logger.log(text = txt)
+            print("Max training time reached.")
             break
 
         # ---- sample opponent
@@ -333,9 +309,7 @@ def train_PPO_competitive_parallel(
 
             mean_steps_over_100_games = sum([steps*num_games for steps, num_games in zip(mean_steps, games_played_for_mean_steps)])/sum(games_played_for_mean_steps)
 
-            txt = f"""[{int(time.time()-start_time)}s] Ep {episode} | Games {games_played} | W/D/L {wins}/{draws}/{losses} ({win_rate:.2f}) | Avg steps {avg_steps:.1f} ({mean_steps_over_100_games:.1f})| Score {score_0/games_played:.2f}-{score_1/games_played:.2f} | Reward {avg_reward:.4f} | Pool {len(opponent_pool)}"""
-            print(txt)
-            if log: logger.log(text = txt)
+            print(f"""[{int(time.time()-start_time)}s] Ep {episode} | Games {games_played} | W/D/L {wins}/{draws}/{losses} ({win_rate:.2f}) | Avg steps {avg_steps:.1f} ({mean_steps_over_100_games:.1f})| Score {score_0/games_played:.2f}-{score_1/games_played:.2f} | Reward {avg_reward:.4f} | Pool {len(opponent_pool)}""")
 
             # reset stats
             current_reward = 0.0
@@ -349,9 +323,7 @@ def train_PPO_competitive_parallel(
         # -------------------------
         if episode % eval_interval == 0:
 
-            txt = ">>> Evaluating vs random agent..."
-            print(txt)
-            if log: logger.log(text = txt)
+            print(">>> Evaluating vs random agent...")
 
             runTests(
                 players_number=(1, 1),
@@ -362,18 +334,12 @@ def train_PPO_competitive_parallel(
                 training_progression=1.0,
                 nb_tests=100,
                 should_print=False,
-                logger= logger if log else None
             )
 
-    txt = "Saving final model..."
-    print(txt)
-    if log: logger.log(text = txt)
+    print("Saving final model...")
 
     model.save(os.path.join(save_path, f"actor_{total_models}.pt"), 
                     critic=save_all, 
                     critic_path=os.path.join(save_path, f"critic.pt") if save_all else None)
 
-    txt = "Self-play training finished."
-    print(txt)
-    if log: logger.log(text = txt)
-    logger.close()
+    print("Self-play training finished.")
