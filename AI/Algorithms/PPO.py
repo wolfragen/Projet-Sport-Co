@@ -6,6 +6,7 @@ from AI.Network import DeepRLNetwork
 from Engine.Environment import LearningEnvironment
 from AI.Algorithms.DQN import runTests
 from AI.Algorithms.RANDOM import RandomAgent
+from multiprocessing import cpu_count
 
 import copy
 import random
@@ -400,8 +401,10 @@ def train_PPO_competitive(
     draw_penalty: float = -0.5,
     max_steps_per_game: int = 2048,
     eval_interval: int = 500,
+    n_tests = 100,
     load_existing=False,
     load_path=None,
+    n_workers = 1,
 ):
     """
     Train a PPO agent using competitive self-play with an opponent pool.
@@ -644,10 +647,9 @@ def train_PPO_competitive(
         # Evaluation vs random agent
         # -------------------------
         if episode % eval_interval == 0:
-
-            print(">>> Evaluating vs random agent...")
-
-            runTests(
+            if n_workers == 1:
+                print(">>> Evaluating vs random agent...")
+                runTests(
                 players_number=(1, 1),
                 agents=[model, random_agent],
                 scoring_function=model.scoring_function,
@@ -657,7 +659,17 @@ def train_PPO_competitive(
                 nb_tests=100,
                 should_print=False
             )
-
+            else:     
+                num_threads = n_workers if n_workers!= -1 else cpu_count()-1
+                print(f">>> Evaluating vs random agent ({num_threads} threads)...")
+                runTests_multi_thread.runTests(players_number=(1, 1),
+                    agents=[model, random_agent],
+                    scoring_function=model.scoring_function,
+                    reward_coeff_dict=model.reward_coeff_dict,
+                    max_steps=max_steps_per_game,
+                    training_progression=1.0,
+                    nb_tests=100)
+                    
     print("Saving final model...")
     model.save(actor_path = save_path+"actor_final.pt", critic=True, critic_path= save_path+"critic.pt")
     print("Self-play training finished.")

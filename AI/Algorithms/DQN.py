@@ -493,7 +493,6 @@ def runTests(players_number, agents, scoring_function, reward_coeff_dict, max_st
     nb_not_draw = 0
     score_left = 0
     score_right = 0
-    nb_non_draw = 0
     
     start_time = time.time()
     
@@ -516,20 +515,18 @@ def runTests(players_number, agents, scoring_function, reward_coeff_dict, max_st
         
         if(score[0] != 1):
             nb_fail += 1
-        if(score[0] != 0 or score[1] != 0):
-            nb_non_draw += 1
         
         if((episode+1)%(nb_tests/10) == 0 and should_print):
             print(f"[{round(time.time() - start_time)}s] Tests en cours: {(episode+1)/nb_tests*100}%")
             
     
-    print(f"{nb_tests} tests | Reward: {rewards/nb_non_draw:.2f} | Steps: {steps/nb_non_draw:.1f} | Score: {score_left/nb_tests:.2f} / {score_right/nb_tests:.2f} | failed: {nb_fail/nb_tests:.3f}")
+    print(f"[{int(time.time()-start_time)}s] {nb_tests} tests | Reward: {rewards/nb_not_draw:.2f} | W/D/L: {int(score_left)}/{nb_tests-nb_not_draw}/{int(score_right)} | Steps: {steps/nb_not_draw:.1f} | Score: {score_left/nb_tests:.2f} / {score_right/nb_tests:.2f} | failed: {nb_fail/nb_tests:.3f}")
     for key,value in rewards_dict.items():
-        new_val = value/nb_non_draw
+        new_val = value/nb_not_draw
         rewards_dict[key] = new_val
         print(f"| {key}: {new_val:.2f}", end="")
     print()
-    return rewards/nb_non_draw, steps/nb_non_draw, score_left/nb_tests, score_right/nb_tests, nb_fail/nb_tests, rewards_dict
+    return rewards/nb_not_draw, steps/nb_not_draw, score_left/nb_tests, score_right/nb_tests, nb_fail/nb_tests, rewards_dict
 
 
 
