@@ -6,13 +6,12 @@ from AI.Network import DeepRLNetwork
 from Engine.Environment import LearningEnvironment
 from AI.Algorithms.DQN import runTests
 from AI.Algorithms.RANDOM import RandomAgent
-from multiprocessing import cpu_count
+from runTests_multi_thread import get_executor, runTests_multithread
 
 import copy
 import random
 import os
 from collections import deque
-import re
 
 
 # =========================
@@ -66,78 +65,40 @@ class CriticNetwork(DeepRLNetwork):
 # PPO Agent
 # =========================
 class PPOAgent:
-    """
-    PPO agent. For more information about the algorithm and the implementation:
-    https://www.youtube.com/watch?v=5VHLd9eCZ-w
-    https://docs.pytorch.org/tutorials/intermediate/reinforcement_ppo.html
-    https://arxiv.org/abs/1707.06347
-    
-    Parameters
-    ----------
-    dimensions : tuple(List[int])
-        2 lists of integers representing the number of neurons in the actor and critic networks.
-    scoring_function : callable
-        Reward function.
-    reward_coeff_dict : dict[float]
-        Reward coefficients for the scoring function.
-    rollout_size : int
-        rollout size before replay
-    lr_actor : float
-        Learning rate of the actor network.
-    lr_critic : float
-        Learning rate of the critic network.
-    n_epoch : int
-        Number of epoch per batch
-    lr_decay : bool
-        If True, the learning rate of the networks will decrease after each epoch. Defaults to True.
-    clip_eps : float
-        Epsilon for the ClipPPOLoss. Defaults to 0.2.
-    gamma : float
-        Discount factor. Used for advantage/rewards-to-go calculations. Defaults to 0.99
-    lmbda : float
-        Extra factor for the Generalized Advantage Estimate. Defaults to 0.95.
-    critic_loss_coeff : float
-        Factor for the critic loss. Defaults to 0.5.
-    entropy_loss_coeff : float
-        Factor for the entropy loss. Defaults to 0.01.
-    normalize_advantage : bool
-        Whether to normalize the advantage. Defaults to True.
-    max_grad_norm : float
-        Maximum gradient norm value for gradient clipping. Defaults to 1.0. If the value is 0.0, gradient clipping is disabled.
-    cuda : bool
-        Whether to use cuda (if available). Defaults to False
-    """
-    def __init__(self, dimensions: tuple[list[int]], scoring_function: callable, reward_coeff_dict : dict[float], 
-                 rollout_size : int, lr_actor: float, lr_critic : float, n_epoch: int,
-                 lr_decay: bool=True, clip_eps: float=0.2, gamma: float=0.99, lmbda: float=0.95, 
-                 critic_loss_coeff: float=0.5, entropy_loss_coeff: float=0.01, normalize_advantage: bool=True,
-                 max_grad_norm: float=1.0, cuda: bool=False):
-        
-        assert dimensions[1][-1] == 1, "Output of the critic network must be 1 dimensionnal"
-        assert dimensions[0][0] == dimensions[1][0], "Actor and critic networks should have the same input size"
-        
-        self.dimension_actor = dimensions[0]
-        self.dimension_critic = dimensions[1]
+    def __init__(
+        self,
+        dimensions: tuple[list[int]],
+        scoring_function: callable,
+        reward_coeff_dict: dict[float],
+        rollout_size: int,
+        lr_actor: float,
+        lr_critic: float,
+        n_epoch: int,
+        lr_decay: bool = True,
+        clip_eps: float = 0.2,
+        gamma: float = 0.99,
+        lmbda: float = 0.95,
+        critic_loss_coeff: float = 0.5,
+        entropy_loss_coeff: float = 0.01,
+        normalize_advantage: bool = True,
+        max_grad_norm: float = 1.0,
+        cuda: bool = False,
+    ):
+        assert dimensions[1][-1] == 1
+        assert dimensions[0][0] == dimensions[1][0]
 
         self.n_epoch = n_epoch
         self.rollout_size = rollout_size
-
         self.gamma = gamma
         self.lmbda = lmbda
-
         self.clip_eps = clip_eps
         self.critic_loss_coeff = critic_loss_coeff
         self.entropy_loss_coeff = entropy_loss_coeff
         self.max_grad_norm = max_grad_norm
-
         self.scoring_function = scoring_function
         self.reward_coeff_dict = reward_coeff_dict
-
         self.normalize_advantage = normalize_advantage
-
         self.lr_decay = lr_decay
-        self.lr_actor = lr_actor
-        self.lr_critic = lr_critic
 
         self.device = torch.device("cuda" if (cuda and torch.cuda.is_available()) else "cpu")
         self.init_memory()
@@ -179,7 +140,6 @@ class PPOAgent:
         return action_logprobs, state_values, dist_entropy
 
     def compute_gae(self, last_value: float, last_done: bool):
-        """Compute Generalized Advantage Estimation"""
         rewards = self.memory["rewards"]
         values = self.memory["vals"]
         dones = self.memory["dones"]
@@ -252,17 +212,11 @@ class PPOAgent:
     def act(self, state, train=False):
         return self.actor.act(state, train=False)
 
-    def save(self, actor_path, critic=False, critic_path=None):
-        torch.save(self.actor.state_dict(), actor_path)
-        if(critic):
-            assert critic_path is not None
-            torch.save(self.critic.state_dict(), critic_path)
+    def save(self, path):
+        torch.save(self.actor.state_dict(), path)
 
-    def load(self, actor_path, critic=False, critic_path=None):
-        self.actor.load_state_dict(torch.load(actor_path, map_location=self.device))
-        if(critic):
-            assert critic_path is not None
-            self.critic.load_state_dict(torch.load(critic_path, map_location=self.device))
+    def load(self, path):
+        self.actor.load_state_dict(torch.load(path, map_location=self.device))
 
 def train_PPO_model(
     model : PPOAgent,
@@ -279,21 +233,19 @@ def train_PPO_model(
     model : PPOAgent
         The PPOAgent to train
     max_duration : int
-        Max duration of the training process in seconds
+        Max duration of the training process in seconds.
     num_episodes : int
-        Number of episodes for the training. Can stop earlier if max_duration is reached
+        Number of episodes for the training. Can stop earlier if max_duration is reached. 
     save_path : str
         Where the model should be saved 
     interval_notify : int
-        Number of episode until printing information about the current progress in the console. Defaults to 20
-    draw_penalty : float
-        Penalty in case of draw. Defaults to -0.5 """
+        Number of episode until printing information about the current progress in the console"""
 
     env = LearningEnvironment(players_number=(1,0), 
                               scoring_function=model.scoring_function, 
                               reward_coeff_dict=model.reward_coeff_dict,
                               human=False)
-    print(f"Starting training for maximum {max_duration} seconds (maximum {num_episodes} episodes)")
+    print(f"Starting training for {max_duration} seconds ({num_episodes} episodes)")
     start = time.time()
     current_reward = 0
     num_game = 0
@@ -401,9 +353,6 @@ def train_PPO_competitive(
     draw_penalty: float = -0.5,
     max_steps_per_game: int = 2048,
     eval_interval: int = 500,
-    n_tests = 100,
-    load_existing=False,
-    load_path=None,
     n_workers = 1,
 ):
     """
@@ -417,8 +366,6 @@ def train_PPO_competitive(
         reward_coeff_dict=model.reward_coeff_dict,
         human=False
     )
-    
-    total_models = 0
 
     # -------------------------
     # Opponent pool utilities
@@ -427,66 +374,11 @@ def train_PPO_competitive(
 
     # Initial opponent (episode 0 snapshot)
     opponent_pool.append(clone_opponent(model))
-    max_idx = 0
-    
-    if(load_existing):
-        assert load_path is not None
-        # Get all files in directory
-        files = os.listdir(load_path)
-    
-        # Extract actor checkpoints with their index
-        actor_pattern = re.compile(r"actor_(\d+)\.pt")
-    
-        actors = []
-        for f in files:
-            match = actor_pattern.match(f)
-            if match:
-                idx = int(match.group(1))
-                if(idx>max_idx): max_idx = idx
-                actors.append((idx, f))
-        assert len(actors) > 0, "No actor checkpoints found."
-    
-        # Sort actors by index
-        actors.sort(key=lambda x: x[0])
-        if("actor_final.pt" in files):
-            actors.append(("final","actor_final.pt"))
-    
-        # -----------------------------
-        # Load latest actor
-        # -----------------------------
-        last_actor_idx, last_actor_file = actors[-1]
-        last_actor_path = os.path.join(load_path, last_actor_file)
-    
-        # -----------------------------
-        # Load critic
-        # -----------------------------
-        critic_path = os.path.join(load_path, "critic.pt")
-        assert os.path.exists(critic_path), "critic.pt not found."
-        model.load(actor_path=last_actor_path, critic=True, critic_path=critic_path)
-    
-        # -----------------------------
-        # Load past max_pool_size actors (excluding latest)
-        # -----------------------------
-        previous_actors = actors[:-1]  # remove latest
-        pool_candidates = previous_actors[-max_pool_size:]  # take last max_pool_size
-    
-        opponent_pool = []
-        for idx, filename in pool_candidates:
-            path = os.path.join(load_path, filename)
-            opp = clone_opponent(model)
-            opp.load(actor_path=path)
-            opponent_pool.append(opp)
-            
-        total_models = max_idx+1
-    
-        print(f"Loaded latest actor: actor_{last_actor_idx}.pt")
-        print(f"Loaded {len(opponent_pool)} previous actors for pool")
 
     # Random agent for evaluation
     random_agent = RandomAgent(action_dim=4)
 
     print(f"Starting PPO self-play with opponent pool ({num_episodes} episodes)")
-
     start_time = time.time()
 
     # -------------------------
@@ -504,7 +396,6 @@ def train_PPO_competitive(
     mean_steps.append(max_steps_per_game)
     total_steps_for_mean = 0
     games_played_for_mean = 0
-    
 
     # =========================
     # Training loop
@@ -524,7 +415,7 @@ def train_PPO_competitive(
         elif r < 1.1:
             opponent = random.choice(opponent_pool) # random, 20% -> TODO 30% pour l'instant
         else:
-            opponent = None                         # solo-play 10%
+            opponent = None                       # solo-play 10%
 
         if opponent is None : 
             env = LearningEnvironment(
@@ -621,10 +512,6 @@ def train_PPO_competitive(
             opponent_pool.append(clone_opponent(model))
             if len(opponent_pool) > max_pool_size:
                 opponent_pool.pop(0)
-            
-            # Save model for safety issue
-            model.save(actor_path = save_path+f"actor_{total_models}.pt", critic=True, critic_path= save_path+"critic.pt")
-            total_models += 1
 
         # -------------------------
         # Training diagnostics
@@ -634,7 +521,16 @@ def train_PPO_competitive(
             avg_steps = total_steps / games_played if games_played > 0 else 0
             win_rate = wins / games_played if games_played > 0 else 0
 
-            print(f"""[{int(time.time()-start_time)}s] Ep {episode} | Games {games_played} | W/D/L {wins}/{draws}/{losses} ({win_rate:.2f}) | Avg steps {avg_steps:.1f} ({sum(mean_steps)/len(mean_steps):.1f})| Score {score_0/games_played:.2f}-{score_1/games_played:.2f} | Reward {avg_reward:.4f} | Pool {len(opponent_pool)}""")
+            print(
+                f"[{int(time.time()-start_time)}s] Ep {episode} | "
+                f"Games {games_played} | "
+                f"W/D/L {wins}/{draws}/{losses} "
+                f"({win_rate:.2f}) | "
+                f"Avg steps {avg_steps:.1f} ({sum(mean_steps)/len(mean_steps):.1f})| "
+                f"Score {score_0/games_played:.2f}-{score_1/games_played:.2f} | "
+                f"Reward {avg_reward:.4f} | "
+                f"Pool {len(opponent_pool)}"
+            )
 
             # reset stats
             current_reward = 0.0
@@ -647,31 +543,31 @@ def train_PPO_competitive(
         # Evaluation vs random agent
         # -------------------------
         if episode % eval_interval == 0:
+            print(">>> Evaluating vs random agent...")
             if n_workers == 1:
-                print(">>> Evaluating vs random agent...")
                 runTests(
-                players_number=(1, 1),
-                agents=[model, random_agent],
-                scoring_function=model.scoring_function,
-                reward_coeff_dict=model.reward_coeff_dict,
-                max_steps=max_steps_per_game,
-                training_progression=1.0,
-                nb_tests=100,
-                should_print=False
-            )
-            else:     
-                num_threads = n_workers if n_workers!= -1 else cpu_count()-1
-                print(f">>> Evaluating vs random agent ({num_threads} threads)...")
-                runTests_multi_thread.runTests(players_number=(1, 1),
+                    players_number=(1, 1),
                     agents=[model, random_agent],
                     scoring_function=model.scoring_function,
                     reward_coeff_dict=model.reward_coeff_dict,
                     max_steps=max_steps_per_game,
                     training_progression=1.0,
-                    nb_tests=100)
-                    
+                    nb_tests=100,
+                    should_print=False
+                )
+            else:
+                print(f">>> Running on {n_workers} threads...")
+                runTests_multithread(players_number=(1, 1),
+                    agents=[model, random_agent],
+                    scoring_function=model.scoring_function,
+                    reward_coeff_dict=model.reward_coeff_dict,
+                    max_steps=max_steps_per_game,
+                    training_progression=1.0,
+                    nb_tests=100,
+                    n_workers=n_workers)
+
     print("Saving final model...")
-    model.save(actor_path = save_path+"actor_final.pt", critic=True, critic_path= save_path+"critic.pt")
+    model.save(os.path.join(save_path, "model.pt"))
     print("Self-play training finished.")
     
     
@@ -686,9 +582,6 @@ def train_PPO_competitive_full_games(
     draw_penalty: float = -0.5,
     max_steps_per_game: int = 2048,
     eval_interval: int = 500,
-    save_all: bool = False,
-    save_all_models: bool = False,
-    model_name: str = "model",
 ):
     """
     Train a PPO agent using competitive self-play with an opponent pool.
@@ -729,7 +622,6 @@ def train_PPO_competitive_full_games(
     random_agent = RandomAgent(action_dim=4)
 
     print(f"Starting PPO self-play with opponent pool ({num_episodes} episodes)")
-
     start_time = time.time()
 
     # =========================
@@ -869,15 +761,17 @@ def train_PPO_competitive_full_games(
             win_rate = wins / games_played if games_played > 0 else 0
 
             avg_reward_str = " | ".join([f"{k}: {v:.4f}" for k, v in avg_reward_components.items()])
+            print(
+                f"[{int(time.time()-start_time)}s] Ep {episode} | "
+                f"Games {games_played} | "
+                f"W/D/L {wins}/{draws}/{losses} | "
+                f"({win_rate:.2f}) | "
+                f"Score {score_0/games_played:.2f}-{score_1/games_played:.2f} | "
+                f"{avg_reward_str} | "
+                f"Pool {len(opponent_pool)}"
+            )
 
-            print(f"[{int(time.time()-start_time)}s] Ep {episode} | "\
-                f"Games {games_played} | "\
-                f"W/D/L {wins}/{draws}/{losses} | "\
-                f"({win_rate:.2f}) | "\
-                f"Score {score_0/games_played:.2f}-{score_1/games_played:.2f} | "\
-                f"{avg_reward_str} | "\
-                f"Pool {len(opponent_pool)}")
-            
+
             # reset stats
             current_reward = 0.0
             score_0 = score_1 = 0
@@ -891,13 +785,6 @@ def train_PPO_competitive_full_games(
         # Evaluation vs random agent
         # -------------------------
         if episode % eval_interval == 0:
-            model_file_name = f"{model_name}_{episode//eval_interval}" if save_all_models else model_name
-            print(f">>> Checkpoint reached, saving {model_file_name}...")
-
-            model.save(os.path.join(save_path, f"{model_file_name}_actor.pt"), 
-                       critic=save_all, 
-                       critic_path=os.path.join(save_path, f"{model_file_name}_critic.pt") if save_all else None)
-
             print(">>> Evaluating vs random agent...")
             runTests(
                 players_number=(1, 1),
@@ -907,20 +794,11 @@ def train_PPO_competitive_full_games(
                 max_steps=max_steps_per_game,
                 training_progression=1.0,
                 nb_tests=100,
-                should_print=True,
+                should_print=True
             )
 
     print("Saving final model...")
-
-    if save_all_models:
-        model.save(os.path.join(save_path, f"{model_file_name}_actor_final.pt"), 
-                       critic=save_all, 
-                       critic_path=os.path.join(save_path, f"{model_file_name}_critic_final.pt") if save_all else None)
-    else:
-        model.save(os.path.join(save_path, f"{model_file_name}_actor.pt"), 
-                       critic=save_all, 
-                       critic_path=os.path.join(save_path, f"{model_file_name}_critic.pt") if save_all else None)
-
+    model.save(os.path.join(save_path, "model.pt"))
     print("Self-play training finished.")
     
     

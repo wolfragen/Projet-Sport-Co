@@ -1,6 +1,6 @@
 from Engine.Environment import LearningEnvironment
-from dataclasses import dataclass
 from concurrent.futures import ProcessPoolExecutor
+from multiprocessing import cpu_count
 import time
 import torch
 
@@ -16,8 +16,6 @@ def get_executor(n_workers, initargs):
 def init_worker(players_number, scoring_function, reward_coeff_dict):
     global runTest_env
     from Engine.Environment import LearningEnvironment
-    import pygame
-    import pymunk
     runTest_env = LearningEnvironment(players_number=players_number, scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict, 
                               training_progression=1.0, display=False, human=False)
 
@@ -107,10 +105,10 @@ def _worker_runTest(n_game, n_players, agents, max_steps):
     return sum_rewards, total_steps, int(score_left), int(score_right), sum_reward_dict
 
 def get_worker_distribution(n_workers: int, n_iter: int) -> list[int]:
-    assert n_workers > 0
-    val: int = n_iter//n_workers
-    worker_distribution: list[int] = [val]*n_workers
-    remains = n_iter%n_workers
+    new_n_workers = cpu_count() if n_workers <= 0 else n_workers
+    val: int = n_iter//new_n_workers
+    worker_distribution: list[int] = [val]*new_n_workers
+    remains = n_iter%new_n_workers
     for i in range(remains):
         worker_distribution[i] +=1
     return worker_distribution
