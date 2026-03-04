@@ -8,7 +8,7 @@ Created on Sat Oct 11 18:44:53 2025
 import time
 import pygame
 
-import Settings
+from Settings import Settings
 
 
 time_last_action = 0

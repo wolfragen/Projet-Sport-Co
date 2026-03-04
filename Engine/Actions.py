@@ -9,7 +9,7 @@ import math
 import numpy as np
 import pymunk
 
-import Settings
+from Settings import Settings
 
 def reset_movements(players) -> None:
     """

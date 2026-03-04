@@ -10,7 +10,7 @@ import pymunk
 import pymunk.pygame_util
 from PIL import Image, ImageDraw, ImageFont
 
-import Settings
+from Settings import Settings
 
 
 def initScreen():

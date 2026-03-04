@@ -8,7 +8,7 @@ Created on Sun Oct 12 01:47:35 2025
 import numpy as np
 
 import Engine.Actions as Actions
-import Settings
+from Settings import Settings
 
 
 def play(player, ball, action) -> np.array:

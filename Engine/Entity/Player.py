@@ -9,7 +9,7 @@ import pymunk
 import numpy as np
 from random import random
 
-import Settings
+from Settings import Settings
 
 
 def buildPlayers(space, players_number: list[int,int], human: bool = False, phantom_player = None):

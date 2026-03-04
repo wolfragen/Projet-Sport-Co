@@ -85,7 +85,6 @@ class PPOAgent:
         cuda: bool = False,
     ):
         assert dimensions[1][-1] == 1
-        assert dimensions[0][0] == dimensions[1][0]
 
         self.n_epoch = n_epoch
         self.rollout_size = rollout_size
@@ -108,7 +107,8 @@ class PPOAgent:
 
     def init_memory(self):
         self.memory = {
-            "states": [],
+            "actor_states": [],
+            "critic_states": [],
             "log_probs": [],
             "dones": [],
             "vals": [],
@@ -117,8 +117,9 @@ class PPOAgent:
         }
 
     # -------- CPU-safe memory --------
-    def remember(self, states, log_probs, dones, vals, actions, rewards):
-        self.memory["states"].append(np.asarray(states, dtype=np.float32))
+    def remember(self, actor_states, critic_states, log_probs, dones, vals, actions, rewards):
+        self.memory["actor_states"].append(np.asarray(actor_states, dtype=np.float32))
+        self.memory["critic_states"].append(np.asarray(critic_states, dtype=np.float32))
         self.memory["log_probs"].append(float(log_probs))
         self.memory["dones"].append(bool(dones))
         self.memory["vals"].append(float(vals))
@@ -126,16 +127,17 @@ class PPOAgent:
         self.memory["rewards"].append(float(rewards))
 
     # -------- Device-safe evaluation --------
-    def evaluate(self, states, action):
-        states = states.to(self.device)
+    def evaluate(self, actor_states, critic_states, action):
+        actor_states = actor_states.to(self.device)
+        critic_states = critic_states.to(self.device)
         action = action.to(self.device)
 
-        action_probs = self.actor.net(states)
+        action_probs = self.actor.net(actor_states)
         dist = torch.distributions.Categorical(action_probs)
 
         action_logprobs = dist.log_prob(action)
         dist_entropy = dist.entropy()
-        state_values = self.critic.net(states)
+        state_values = self.critic.net(critic_states)
 
         return action_logprobs, state_values, dist_entropy
 
@@ -166,8 +168,14 @@ class PPOAgent:
         return advantages, returns
 
     def replay(self, last_value: float, last_done: bool):
-        old_states = torch.as_tensor(
-            np.array(self.memory["states"]),
+        old_actor_states = torch.as_tensor(
+            np.array(self.memory["actor_states"]),
+            dtype=torch.float32,
+            device=self.device,
+        )
+        
+        old_critic_states = torch.as_tensor(
+            np.array(self.memory["critic_states"]),
             dtype=torch.float32,
             device=self.device,
         )
@@ -181,8 +189,8 @@ class PPOAgent:
         advantages, returns = self.compute_gae(last_value, last_done)
 
         for _ in range(self.n_epoch):
-            logprobs, state_values, dist_entropy = self.evaluate(old_states, old_actions)
-            state_values = state_values.squeeze(-1)
+            logprobs, state_values, dist_entropy = self.evaluate(old_actor_states, old_critic_states, old_actions)
+            state_values = self.critic.net(old_critic_states).squeeze(-1)
 
             ratios = torch.exp(logprobs - old_logprobs)
             loss_clip = -torch.min(
@@ -223,121 +231,6 @@ class PPOAgent:
         if(critic):
             assert critic_path is not None
             self.critic.load_state_dict(torch.load(critic_path, map_location=self.device))
-
-def train_PPO_model(
-    model : PPOAgent,
-    max_duration : int,
-    num_episodes: int,
-    save_path : str,
-    interval_notify : int = 20,
-    max_steps_per_game: int = 2048,
-    draw_penalty = -0.5):
-    """ Train a PPO model
-
-    Parameters
-    ----------
-    model : PPOAgent
-        The PPOAgent to train
-    max_duration : int
-        Max duration of the training process in seconds.
-    num_episodes : int
-        Number of episodes for the training. Can stop earlier if max_duration is reached. 
-    save_path : str
-        Where the model should be saved 
-    interval_notify : int
-        Number of episode until printing information about the current progress in the console"""
-
-    env = LearningEnvironment(players_number=(1,0), 
-                              scoring_function=model.scoring_function, 
-                              reward_coeff_dict=model.reward_coeff_dict,
-                              human=False)
-    print(f"Starting training for {max_duration} seconds ({num_episodes} episodes)")
-    start = time.time()
-    current_reward = 0
-    num_game = 0
-    score_history_1, score_history_2 = 0,0
-    
-    done = False
-    done_ppo = False
-    state = env.getState(0)
-    step_in_game = 0
-    total_steps = 0
-
-    for i_episode in range(1, num_episodes + 1):
-        if time.time() - start > max_duration:
-            print("Reached max time for training, interrupting")
-            break
-        loss_hist = {"clip":0, "val":0, "entropy":0}
-
-        for _ in range(model.rollout_size):
-            step_in_game += 1
-            state_t = torch.as_tensor(state, dtype=torch.float32, device=model.device).unsqueeze(0)
-
-            with torch.no_grad():
-                action, logprob = model.actor.act(state)
-                value = model.critic.net(state_t).squeeze(-1).item()
-           
-            env.playerAct(0, action)
-
-            reward = env.step()[0]
-            current_reward += reward
-            done = env.isDone()
-            
-            timeout = step_in_game >= max_steps_per_game
-            done_ppo = done or timeout
-
-            if timeout:
-                reward += draw_penalty
-                current_reward += draw_penalty
-            
-            model.remember(state, logprob, done_ppo, value, action, reward)
-            
-            if done_ppo:
-                score_history_1 += env.score[0]
-                score_history_2 += env.score[1]
-                num_game += 1
-                
-                total_steps += step_in_game
-                step_in_game = 0
-                env.reset()
-            
-            state = env.getState(0)
-                
-        with torch.no_grad():
-            if done_ppo:
-                last_value = 0.0
-            else:
-                state_t = torch.as_tensor(state, dtype=torch.float32, device=model.device).unsqueeze(0)
-                last_value = model.critic.net(state_t).squeeze(-1).item()
-            
-        loss = model.replay(last_value=last_value, last_done=done_ppo)
-
-        loss_hist["clip"] += loss["clip"]
-        loss_hist["val"] += loss["val"]
-        loss_hist["entropy"] += loss["entropy"]
-
-        model.init_memory()
-        if i_episode%interval_notify == 0:
-            print(
-                f"[{int(time.time()-start)}s] Ep {i_episode} | "
-                f"Games {num_game} | "
-                f"W/D/L {score_history_1}/{num_game - score_history_1 - score_history_2}/{score_history_2} "
-                f"({score_history_1/num_game:.2f}) | "
-                f"Avg steps {total_steps/num_game:.1f} | "
-                f"Reward {current_reward/num_game:.4f} | "
-                f"Clip {loss_hist['clip']:4e} | "
-                f"Val {loss_hist['val']:4e} | "
-                f"Entropy {loss_hist['entropy']:4e} | "
-            )
-            num_game = 0
-            current_reward = 0
-            total_steps = 0
-            score_history_1, score_history_2 = 0,0
-            loss_hist = {"clip":0, "val":0, "entropy":0}
-
-    print("Saving network...")
-    model.save(save_path + "model.pt")
-    print("Training finished")
     
     
 def clone_opponent(source: PPOAgent) -> PPOAgent:
@@ -350,6 +243,7 @@ def clone_opponent(source: PPOAgent) -> PPOAgent:
 
 def train_PPO_competitive(
     model: PPOAgent,
+    players_number: tuple[int, int],
     max_duration: int,
     num_episodes: int,
     save_path: str,
@@ -362,259 +256,240 @@ def train_PPO_competitive(
     load_existing=False,
     load_path=None,
 ):
-    """
-    Train a PPO agent using competitive self-play with an opponent pool.
-    Includes full training diagnostics and evaluation vs a random agent.
-    """
 
     env = LearningEnvironment(
-        players_number=(1, 1),
+        players_number=players_number,
         scoring_function=model.scoring_function,
         reward_coeff_dict=model.reward_coeff_dict,
         human=False
     )
-    
+
     total_models = 0
-
-    # -------------------------
-    # Opponent pool utilities
-    # -------------------------
     opponent_pool = []
-
-    # Initial opponent (episode 0 snapshot)
     opponent_pool.append(clone_opponent(model))
     max_idx = 0
-    
-    if(load_existing):
+
+    if load_existing:
         assert load_path is not None
-        # Get all files in directory
         files = os.listdir(load_path)
-    
-        # Extract actor checkpoints with their index
         actor_pattern = re.compile(r"actor_(\d+)\.pt")
-    
+
         actors = []
         for f in files:
             match = actor_pattern.match(f)
             if match:
                 idx = int(match.group(1))
-                if(idx>max_idx): max_idx = idx
+                if idx > max_idx:
+                    max_idx = idx
                 actors.append((idx, f))
-        assert len(actors) > 0, "No actor checkpoints found."
-    
-        # Sort actors by index
+        assert len(actors) > 0
+
         actors.sort(key=lambda x: x[0])
-        if("actor_final.pt" in files):
-            actors.append(("final","actor_final.pt"))
-    
-        # -----------------------------
-        # Load latest actor
-        # -----------------------------
+        if "actor_final.pt" in files:
+            actors.append(("final", "actor_final.pt"))
+
         last_actor_idx, last_actor_file = actors[-1]
         last_actor_path = os.path.join(load_path, last_actor_file)
-    
-        # -----------------------------
-        # Load critic
-        # -----------------------------
+
         critic_path = os.path.join(load_path, "critic.pt")
-        assert os.path.exists(critic_path), "critic.pt not found."
+        assert os.path.exists(critic_path)
+
         model.load(actor_path=last_actor_path, critic=True, critic_path=critic_path)
-    
-        # -----------------------------
-        # Load past max_pool_size actors (excluding latest)
-        # -----------------------------
-        previous_actors = actors[:-1]  # remove latest
-        pool_candidates = previous_actors[-max_pool_size:]  # take last max_pool_size
-    
+
+        previous_actors = actors[:-1]
+        pool_candidates = previous_actors[-max_pool_size:]
+
         opponent_pool = []
         for idx, filename in pool_candidates:
             path = os.path.join(load_path, filename)
             opp = clone_opponent(model)
             opp.load(actor_path=path)
             opponent_pool.append(opp)
-            
-        total_models = max_idx+1
-    
-        print(f"Loaded latest actor: actor_{last_actor_idx}.pt")
-        print(f"Loaded {len(opponent_pool)} previous actors for pool")
 
-    # Random agent for evaluation
+        total_models = max_idx + 1
+
     random_agent = RandomAgent(action_dim=4)
 
     print(f"Starting PPO self-play with opponent pool ({num_episodes} episodes)")
     start_time = time.time()
 
-    # -------------------------
-    # Training statistics
-    # -------------------------
     current_reward = 0.0
     score_0 = score_1 = 0
     games_played = 0
     wins = losses = draws = 0
     total_steps = 0
 
-    state = env.getState(0)
     step_in_game = 0
     mean_steps = deque(maxlen=100)
     mean_steps.append(max_steps_per_game)
     total_steps_for_mean = 0
     games_played_for_mean = 0
     
+    n_players_left = players_number[0]
+    n_players = sum(players_number)
 
-    # =========================
-    # Training loop
-    # =========================
     for episode in range(1, num_episodes + 1):
 
         if time.time() - start_time > max_duration:
             print("Max training time reached.")
             break
 
-        # ---- sample opponent
         r = random.random()
-        if r < 0.1:
-            opponent = model                        # mirror, 10%
-        elif r < 0.7:
-            opponent = opponent_pool[-1]       # most recent, 60%
-        elif r < 1.1:
-            opponent = random.choice(opponent_pool) # random, 20% -> TODO 30% pour l'instant
+        if(n_players_left == 1):
+            if r < 0.1:
+                opponent = model
+            elif r < 0.7:
+                opponent = opponent_pool[-1]
+            else:
+                opponent = random.choice(opponent_pool)
         else:
-            opponent = None                         # solo-play 10%
+            if r < 0.6:
+                opponent = opponent_pool[-1]
+            else:
+                opponent = random.choice(opponent_pool)
 
-        if opponent is None : 
-            env = LearningEnvironment(
-                players_number=(1, 0),
-                scoring_function=model.scoring_function,
-                reward_coeff_dict=model.reward_coeff_dict,
-                mean_steps = sum(mean_steps)/len(mean_steps),
-                human=False,
-                phantom_player=True,
-            )
-        else:
-            env = LearningEnvironment(
-                players_number=(1, 1),
-                scoring_function=model.scoring_function,
-                reward_coeff_dict=model.reward_coeff_dict,
-                mean_steps = sum(mean_steps)/len(mean_steps),
-                human=False
-            )
+        env = LearningEnvironment(
+            players_number=players_number,
+            scoring_function=model.scoring_function,
+            reward_coeff_dict=model.reward_coeff_dict,
+            mean_steps=sum(mean_steps)/len(mean_steps),
+            human=False
+        )
 
-        # ---- rollout
+        step_in_game = 0
+
         for rollout in range(model.rollout_size):
 
-            state_t = torch.as_tensor(
-                state, dtype=torch.float32, device=model.device
+            actor_states = [env.getState(p_id) for p_id in range(n_players_left)]
+            critic_state = env.getGlobalState()
+
+            critic_state_t = torch.as_tensor(
+                critic_state, dtype=torch.float32, device=model.device
             ).unsqueeze(0)
 
             with torch.no_grad():
-                action_0, logprob = model.actor.act(state)
-                value = model.critic.net(state_t).squeeze(-1).item()
-                if opponent is not None : action_1 = opponent.act(env.getState(1))
+                value = model.critic.net(critic_state_t).squeeze(-1).item()
 
-            env.playerAct(0, action_0)
-            if opponent is not None : env.playerAct(1, action_1)
+                actions_left = []
+                logprobs_left = []
+                for p_id in range(n_players_left):
+                    action, logprob = model.actor.act(actor_states[p_id])
+                    actions_left.append(action)
+                    logprobs_left.append(logprob)
+
+                actions_right = []
+                for p_id in range(n_players_left, n_players):
+                    actions_right.append(opponent.act(env.getState(p_id)))
+
+            for p_id, action in enumerate(actions_left):
+                env.playerAct(p_id, action)
+
+            for idx, p_id in enumerate(range(n_players_left, n_players)):
+                env.playerAct(p_id, actions_right[idx])
 
             rewards = env.step()
-            reward = rewards[0]
 
-            current_reward += reward
             step_in_game += 1
-
             done_env = env.isDone()
             timeout = step_in_game >= max_steps_per_game
-            rollout_timeout = (rollout == model.rollout_size-1) and not timeout
+            rollout_timeout = (rollout == model.rollout_size - 1) and not timeout
             done_ppo = done_env or timeout or rollout_timeout
 
             if timeout:
-                reward += draw_penalty
-                current_reward += draw_penalty
+                for p_id in range(n_players_left):
+                    rewards[p_id] += draw_penalty
 
-            model.remember(state, logprob, done_ppo, value, action_0, reward)
+            for p_id in range(n_players_left):
+                model.remember(
+                    actor_states[p_id],
+                    critic_state,
+                    logprobs_left[p_id],
+                    done_ppo,
+                    value,
+                    actions_left[p_id],
+                    rewards[p_id]
+                )
+                current_reward += rewards[p_id]
 
             if done_ppo:
                 if not rollout_timeout:
-                    # ---- bookkeeping
                     total_steps += step_in_game
                     total_steps_for_mean += step_in_game
                     games_played_for_mean += 1
                     games_played += 1
-    
+
                     if env.score[0] > env.score[1]:
                         wins += 1
                     elif env.score[0] < env.score[1]:
                         losses += 1
                     else:
                         draws += 1
-    
+
                     score_0 += env.score[0]
                     score_1 += env.score[1]
 
                 env.reset()
                 step_in_game = 0
 
-            state = env.getState(0)
-
-        # ---- PPO update
         with torch.no_grad():
             if done_ppo:
                 last_value = 0.0
             else:
-                state_t = torch.as_tensor(
-                    state, dtype=torch.float32, device=model.device
+                critic_state = env.getGlobalState()
+                critic_state_t = torch.as_tensor(
+                    critic_state, dtype=torch.float32, device=model.device
                 ).unsqueeze(0)
-                last_value = model.critic.net(state_t).squeeze(-1).item()
+                last_value = model.critic.net(critic_state_t).squeeze(-1).item()
 
         model.replay(last_value=last_value, last_done=done_ppo)
         model.init_memory()
 
-        mean_steps.append(total_steps_for_mean/games_played_for_mean)
+        if games_played_for_mean > 0:
+            mean_steps.append(total_steps_for_mean/games_played_for_mean)
+
         total_steps_for_mean = 0
         games_played_for_mean = 0
 
-        # ---- save opponent snapshot
         if episode % opponent_save_interval == 0:
             opponent_pool.append(clone_opponent(model))
             if len(opponent_pool) > max_pool_size:
                 opponent_pool.pop(0)
-            
-            # Save model for safety issue
-            model.save(actor_path = save_path+f"actor_{total_models}.pt", critic=True, critic_path= save_path+"critic.pt")
+
+            model.save(
+                actor_path=save_path+f"actor_{total_models}.pt",
+                critic=True,
+                critic_path=save_path+"critic.pt"
+            )
             total_models += 1
 
-        # -------------------------
-        # Training diagnostics
-        # -------------------------
         if episode % interval_notify == 0:
-            avg_reward = current_reward / games_played if games_played > 0 else 0
-            avg_steps = total_steps / games_played if games_played > 0 else 0
-            win_rate = wins / games_played if games_played > 0 else 0
+            avg_reward = current_reward / max(games_played * n_players_left, 1)
+            avg_steps = total_steps / max(games_played, 1)
+            win_rate = wins / max(games_played, 1)
 
             print(
                 f"[{int(time.time()-start_time)}s] Ep {episode} | "
                 f"Games {games_played} | "
                 f"W/D/L {wins}/{draws}/{losses} "
                 f"({win_rate:.2f}) | "
-                f"Avg steps {avg_steps:.1f} ({sum(mean_steps)/len(mean_steps):.1f})| "
-                f"Score {score_0/games_played:.2f}-{score_1/games_played:.2f} | "
-                f"Reward {avg_reward:.4f} | "
-                f"Pool {len(opponent_pool)}"
+                f"Avg steps {avg_steps:.1f} ({sum(mean_steps)/len(mean_steps):.1f}) | "
+                f"Score {score_0/max(games_played,1):.2f}-"
+                f"{score_1/max(games_played,1):.2f} | "
+                f"Reward/player {avg_reward:.4f} | "
+                f"Gen {total_models}"
             )
 
-            # reset stats
             current_reward = 0.0
             score_0 = score_1 = 0
             games_played = 0
             wins = losses = draws = 0
             total_steps = 0
 
-        # -------------------------
-        # Evaluation vs random agent
-        # -------------------------
         if episode % eval_interval == 0:
             print(">>> Evaluating vs random agent...")
             runTests(
-                players_number=(1, 1),
-                agents=[model, random_agent],
+                players_number=players_number,
+                agents=[model]*n_players_left + [random_agent]*players_number[1],
                 scoring_function=model.scoring_function,
                 reward_coeff_dict=model.reward_coeff_dict,
                 max_steps=max_steps_per_game,
@@ -624,8 +499,14 @@ def train_PPO_competitive(
             )
 
     print("Saving final model...")
-    model.save(actor_path = save_path+"actor_final.pt", critic=True, critic_path= save_path+"critic.pt")
+    model.save(
+        actor_path=save_path+"actor_final.pt",
+        critic=True,
+        critic_path=save_path+"critic.pt"
+    )
     print("Self-play training finished.")
+    
+    
     
     
 def train_PPO_competitive_full_games(
@@ -861,7 +742,120 @@ def train_PPO_competitive_full_games(
     
     
     
+def train_PPO_model(
+    model : PPOAgent,
+    max_duration : int,
+    num_episodes: int,
+    save_path : str,
+    interval_notify : int = 20,
+    max_steps_per_game: int = 2048,
+    draw_penalty = -0.5):
+    """ Train a PPO model
+
+    Parameters
+    ----------
+    model : PPOAgent
+        The PPOAgent to train
+    max_duration : int
+        Max duration of the training process in seconds.
+    num_episodes : int
+        Number of episodes for the training. Can stop earlier if max_duration is reached. 
+    save_path : str
+        Where the model should be saved 
+    interval_notify : int
+        Number of episode until printing information about the current progress in the console"""
+
+    env = LearningEnvironment(players_number=(1,0), 
+                              scoring_function=model.scoring_function, 
+                              reward_coeff_dict=model.reward_coeff_dict,
+                              human=False)
+    print(f"Starting training for {max_duration} seconds ({num_episodes} episodes)")
+    start = time.time()
+    current_reward = 0
+    num_game = 0
+    score_history_1, score_history_2 = 0,0
     
+    done = False
+    done_ppo = False
+    state = env.getState(0)
+    step_in_game = 0
+    total_steps = 0
+
+    for i_episode in range(1, num_episodes + 1):
+        if time.time() - start > max_duration:
+            print("Reached max time for training, interrupting")
+            break
+        loss_hist = {"clip":0, "val":0, "entropy":0}
+
+        for _ in range(model.rollout_size):
+            step_in_game += 1
+            state_t = torch.as_tensor(state, dtype=torch.float32, device=model.device).unsqueeze(0)
+
+            with torch.no_grad():
+                action, logprob = model.actor.act(state)
+                value = model.critic.net(state_t).squeeze(-1).item()
+           
+            env.playerAct(0, action)
+
+            reward = env.step()[0]
+            current_reward += reward
+            done = env.isDone()
+            
+            timeout = step_in_game >= max_steps_per_game
+            done_ppo = done or timeout
+
+            if timeout:
+                reward += draw_penalty
+                current_reward += draw_penalty
+            
+            model.remember(state, logprob, done_ppo, value, action, reward)
+            
+            if done_ppo:
+                score_history_1 += env.score[0]
+                score_history_2 += env.score[1]
+                num_game += 1
+                
+                total_steps += step_in_game
+                step_in_game = 0
+                env.reset()
+            
+            state = env.getState(0)
+                
+        with torch.no_grad():
+            if done_ppo:
+                last_value = 0.0
+            else:
+                state_t = torch.as_tensor(state, dtype=torch.float32, device=model.device).unsqueeze(0)
+                last_value = model.critic.net(state_t).squeeze(-1).item()
+            
+        loss = model.replay(last_value=last_value, last_done=done_ppo)
+
+        loss_hist["clip"] += loss["clip"]
+        loss_hist["val"] += loss["val"]
+        loss_hist["entropy"] += loss["entropy"]
+
+        model.init_memory()
+        if i_episode%interval_notify == 0:
+            print(
+                f"[{int(time.time()-start)}s] Ep {i_episode} | "
+                f"Games {num_game} | "
+                f"W/D/L {score_history_1}/{num_game - score_history_1 - score_history_2}/{score_history_2} "
+                f"({score_history_1/num_game:.2f}) | "
+                f"Avg steps {total_steps/num_game:.1f} | "
+                f"Reward {current_reward/num_game:.4f} | "
+                f"Clip {loss_hist['clip']:4e} | "
+                f"Val {loss_hist['val']:4e} | "
+                f"Entropy {loss_hist['entropy']:4e} | "
+            )
+            num_game = 0
+            current_reward = 0
+            total_steps = 0
+            score_history_1, score_history_2 = 0,0
+            loss_hist = {"clip":0, "val":0, "entropy":0}
+
+    print("Saving network...")
+    model.save(save_path + "model.pt")
+    print("Training finished")
     
     
     
