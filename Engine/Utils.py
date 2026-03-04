@@ -7,7 +7,7 @@ Created on Sun Oct 12 14:23:39 2025
 
 import pymunk
 
-import Settings
+from Settings import Settings
 from Engine.Actions import canShoot
 
 

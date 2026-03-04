@@ -9,13 +9,13 @@ import numpy as np
 import pygame
 from random import randint
 
-import Settings
+from Settings import Settings
 from Graphics.GraphicEngine import display, startDisplay
 from Engine.Utils import checkIfGoal, createSpace, checkPlayersOut, checkPlayersCanShoot
 from Engine.Entity.Board import buildBoard
 from Engine.Entity.Ball import buildBall
 from Engine.Entity.Player import buildPlayers
-from Engine.Vision import getVision
+from Engine.Vision import getVision, getGlobalVision
 from Engine.Actions import reset_movements, define_previous_pos
 from AI.AIActions import play
 from Player.PlayerActions import process_events
@@ -89,10 +89,13 @@ class LearningEnvironment():
     def getState(self, player_id):
         return getVision(self.space, self.players, player_id, self.ball, self.left_goal_position, self.right_goal_position, phantom_player=self.phantom_player)
     
+    def getGlobalState(self):
+        return getGlobalVision(self.space, self.players, self.ball, self.left_goal_position, self.right_goal_position, phantom_player=self.phantom_player)
+    
     def getReward(self, player_id, debug=False):
         player = self.players[player_id]
         action = self.previous_actions[player_id]
-        return self.scoring_function(self.reward_coeff_dict, player, action, self.ball, self.left_goal_position, 
+        return self.scoring_function(self.reward_coeff_dict, player, self.players_number, action, self.ball, self.left_goal_position, 
                                        self.right_goal_position, self.score, self.previous_score, self.mean_steps, 
                                        self.training_progression, debug)
     

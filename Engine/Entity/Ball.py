@@ -8,7 +8,7 @@ Created on Fri Oct 31 15:11:32 2025
 import pymunk
 from random import randint
 
-import Settings
+from Settings import Settings
 
 
 def buildBall(space):

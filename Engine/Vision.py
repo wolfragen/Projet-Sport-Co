@@ -28,7 +28,7 @@ import math
 import numpy as np
 import pymunk
 
-import Settings
+from Settings import Settings
 
 
 def rayTracing(space, player: tuple[pymunk.Body, pymunk.Shape]) -> tuple[np.ndarray, np.ndarray]:
@@ -129,92 +129,148 @@ def getVision(space, players: list[tuple[pymunk.Body, pymunk.Shape]], player_id,
 
     vision_array = np.zeros(Settings.ENTRY_NEURONS, dtype=np.float32)
 
-    # Player, ball, and goals positions
     player = players[player_id]
     body, shape = player
     ball_body, _ = ball
+
     dim_x = Settings.DIM_X
     dim_y = Settings.DIM_Y
-    
-    # Normalize positions by the field dimensions
-    dx_ball = (ball_body.position[0] - body.position[0]) / dim_x
-    dy_ball = (ball_body.position[1] - body.position[1]) / dim_y
-    
-    dx_left_goal  = (left_goal_position[0]  - body.position[0]) / dim_x
-    dy_left_goal  = (left_goal_position[1]  - body.position[1]) / dim_y
-    dx_right_goal = (right_goal_position[0] - body.position[0]) / dim_x
-    dy_right_goal = (right_goal_position[1] - body.position[1]) / dim_y
-    
+    shooting_speed = Settings.SHOOTING_SPEED
+    player_speed = Settings.PLAYER_SPEED
+
+    body_pos_x, body_pos_y = body.position
+    ball_pos_x, ball_pos_y = ball_body.position
+
+    dx_ball = (ball_pos_x - body_pos_x) / dim_x
+    dy_ball = (ball_pos_y - body_pos_y) / dim_y
+
+    dx_left_goal  = (left_goal_position[0]  - body_pos_x) / dim_x
+    dy_left_goal  = (left_goal_position[1]  - body_pos_y) / dim_y
+    dx_right_goal = (right_goal_position[0] - body_pos_x) / dim_x
+    dy_right_goal = (right_goal_position[1] - body_pos_y) / dim_y
+
     if shape.left_team:
         sin_a = math.sin(body.angle)
         cos_a = math.cos(body.angle)
-    
+
         own_goal_dx, own_goal_dy = dx_left_goal, dy_left_goal
         opp_goal_dx, opp_goal_dy = dx_right_goal, dy_right_goal
         ball_dx, ball_dy = dx_ball, dy_ball
-        
     else:
-        sin_a = math.sin(body.angle + math.pi)
-        cos_a = math.cos(body.angle + math.pi)
-    
+        angle = body.angle + math.pi
+        sin_a = math.sin(angle)
+        cos_a = math.cos(angle)
+
         own_goal_dx, own_goal_dy = -dx_right_goal, -dy_right_goal
         opp_goal_dx, opp_goal_dy = -dx_left_goal,  -dy_left_goal
         ball_dx, ball_dy = -dx_ball, -dy_ball
-    
-    if not Settings.COMPETITIVE_VISION :
-        vision_array[0] = sin_a
-        vision_array[1] = cos_a
-        vision_array[2:4] = (ball_dx, ball_dy)
-        vision_array[4:6] = (own_goal_dx, own_goal_dy)
-        vision_array[6:8] = (opp_goal_dx, opp_goal_dy)
-        
-        if Settings.ENTRY_NEURONS == 9: # TODO à changer
-            vision_array[8] = int(body.canShoot)
-            
-    else:
-        # Compétitif, vision joueur adverse également !
-        if(Settings.COMPETITIVE_VISION and phantom_player is None and len(players) == 1):
-            print("ERREUR, il faut rajouter un joueur phantôme ou un deuxième joueur.")
-        if(phantom_player is not None):
-            dx_opp_ball = (ball_body.position[0] - phantom_player["position_x"]) / dim_x
-            dy_opp_ball = (ball_body.position[1] - phantom_player["position_y"]) / dim_y
-        else:
-            opponent = players[0]
-            if(player_id == 0):
-                opponent = players[1]
-            opp_body, opp_shape = opponent
-            
-            dx_opp_ball = (ball_body.position[0] - opp_body.position[0]) / dim_x
-            dy_opp_ball = (ball_body.position[1] - opp_body.position[1]) / dim_y
-        
-        ball_vx_rel = (ball_body.velocity[0] - body.velocity[0]) / (Settings.SHOOTING_SPEED + Settings.PLAYER_SPEED)
-        ball_vy_rel = (ball_body.velocity[1] - body.velocity[1]) / (Settings.SHOOTING_SPEED + Settings.PLAYER_SPEED)
-            
-        if(not shape.left_team):
-            dx_opp_ball = - dx_opp_ball
-            dy_opp_ball = - dy_opp_ball
-            ball_vx_rel = - ball_vx_rel
-            ball_vy_rel = - ball_vy_rel
-        
-        
-        vision_array[0] = sin_a
-        vision_array[1] = cos_a
-        vision_array[2:4] = (ball_dx, ball_dy)
-        vision_array[4:6] = (own_goal_dx, own_goal_dy)
-        vision_array[6:8] = (opp_goal_dx, opp_goal_dy)
-        vision_array[8:10] = (ball_vx_rel, ball_vy_rel)
-        vision_array[10:12] = (dx_opp_ball, dy_opp_ball)
-        
 
-    """ # TODO: remettre si on remet le ray Tracing
-    # Normalize ray distances and copy one-hot info
-    ray_data = rayTracing(space, player)
-    ray_data[::8] = ray_data[::8] / dim_x
-    ray_data[1::8] = ray_data[1::8] / dim_y
-    vision_array[8:] = ray_data.flatten()
-    """
-    
+    vision_array[0] = sin_a
+    vision_array[1] = cos_a
+    vision_array[2:4] = (ball_dx, ball_dy)
+    vision_array[4:6] = (own_goal_dx, own_goal_dy)
+    vision_array[6:8] = (opp_goal_dx, opp_goal_dy)
+
+    if not Settings.COMPETITIVE_VISION:
+
+        if Settings.ENTRY_NEURONS == 9:
+            vision_array[8] = int(body.canShoot)
+
+    else:
+
+        body_vel_x, body_vel_y = body.velocity
+        ball_vel_x, ball_vel_y = ball_body.velocity
+
+        denom = shooting_speed + player_speed
+        ball_vx_rel = (ball_vel_x - body_vel_x) / denom
+        ball_vy_rel = (ball_vel_y - body_vel_y) / denom
+
+        if not shape.left_team:
+            ball_vx_rel = -ball_vx_rel
+            ball_vy_rel = -ball_vy_rel
+
+        vision_array[8:10] = (ball_vx_rel, ball_vy_rel)
+
+        insert_index = 10
+
+        for other_id, (other_body, other_shape) in enumerate(players):
+
+            if other_id == player_id:
+                continue
+
+            other_pos_x, other_pos_y = other_body.position
+
+            dx_other_player_ball = (ball_pos_x - other_pos_x) / dim_x
+            dy_other_player_ball = (ball_pos_y - other_pos_y) / dim_y
+
+            if not shape.left_team:
+                dx_other_player_ball = -dx_other_player_ball
+                dy_other_player_ball = -dy_other_player_ball
+
+            vision_array[insert_index:insert_index+3] = (
+                dx_other_player_ball,
+                dy_other_player_ball,
+                other_shape.left_team,
+            )
+
+            insert_index += 3
+            
+        """
+        # Old version : 
+        for other_id, (other_body, other_shape) in enumerate(players):
+
+            if other_id == player_id:
+                continue
+
+            other_pos_x, other_pos_y = other_body.position
+
+            dx_other_player_ball = (ball_pos_x - other_pos_x) / dim_x
+            dy_other_player_ball = (ball_pos_y - other_pos_y) / dim_y
+
+            if not shape.left_team:
+                dx_other_player_ball = -dx_other_player_ball
+                dy_other_player_ball = -dy_other_player_ball
+
+            vision_array[insert_index:insert_index+2] = (
+                dx_other_player_ball,
+                dy_other_player_ball,
+            )
+
+            insert_index += 2
+        """
+
     return vision_array
+
+
+def getGlobalVision(space, players: list[tuple[pymunk.Body, pymunk.Shape]], ball, left_goal_position, right_goal_position, phantom_player=None) -> np.ndarray:
+
+    ball_body, _ = ball
+
+    dim_x = Settings.DIM_X
+    dim_y = Settings.DIM_Y
+
+    ball_pos_x, ball_pos_y = ball_body.position
+    ball_vel_x, ball_vel_y = ball_body.velocity
+
+    vision = [
+        ball_pos_x / dim_x,
+        ball_pos_y / dim_y,
+        ball_vel_x / (Settings.SHOOTING_SPEED + Settings.PLAYER_SPEED),
+        ball_vel_y / (Settings.SHOOTING_SPEED + Settings.PLAYER_SPEED),
+    ]
+
+    for body, shape in players:
+        pos_x, pos_y = body.position
+
+        vision.extend([
+            pos_x / dim_x,
+            pos_y / dim_y,
+            math.sin(body.angle),
+            math.cos(body.angle),
+            1.0 if shape.left_team else -1.0
+        ])
+
+    return np.asarray(vision, dtype=np.float32)
 
 
 

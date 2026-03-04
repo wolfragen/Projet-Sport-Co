@@ -8,14 +8,14 @@ Created on Fri Oct 31 20:27:17 2025
 import numpy as np
 import math
 
-import Settings
+from Settings import Settings
 from Engine.Actions import canShoot
 
 def sigmoid(x):
     return 1/(1+math.exp(-x))
 
 
-def computeReward(coeff_dict, player, action, ball, left_goal_position, right_goal_position, score, previous_score, mean_steps, training_progression=0.0, debug=False):
+def computeReward(coeff_dict, player, players_number, action, ball, left_goal_position, right_goal_position, score, previous_score, mean_steps, training_progression=0.0, debug=False):
         
     body, shape = player
     ball_body, ball_shape = ball
@@ -59,7 +59,7 @@ def computeReward(coeff_dict, player, action, ball, left_goal_position, right_go
         
     can_shoot_reward = 0
     if(can_shoot_coeff is not None):
-        can_shoot_reward = get_shooting_reward(action, body, ball_body, shape, left_goal_position, right_goal_position, can_shoot_coeff, score, previous_score)
+        can_shoot_reward = get_shooting_reward(players_number, action, body, ball_body, shape, left_goal_position, right_goal_position, can_shoot_coeff, score, previous_score)
     
     has_ball_reward = 0
     if(has_ball_coeff is not None):
@@ -163,15 +163,18 @@ def get_has_ball_reward(action, body, has_ball_coeff):
         return -has_ball_coeff
     return 0
         
-def get_shooting_reward(action, body, ball_body, shape, left_goal_position, 
+def get_shooting_reward(players_number, action, body, ball_body, shape, left_goal_position, 
                         right_goal_position, can_shoot_coeff, score, previous_score):
+    n_players_left = players_number[0]
+    if(ball_body.last_player_shoot is not None):
+        if(score[0]>previous_score[0] and shape.left_team and ball_body.last_player_shoot < n_players_left):
+            return can_shoot_coeff
+        elif(score[1]>previous_score[1] and not shape.left_team and ball_body.last_player_shoot >= n_players_left):
+            return can_shoot_coeff
     
-    if(ball_body.last_player_shoot == body.player_id):
-        if(score[0]>previous_score[0] and shape.left_team):
-            return can_shoot_coeff*2
-        elif(score[1]>previous_score[1] and not shape.left_team):
-            return can_shoot_coeff*2
+    return 0.0
     
+    # Pas viable en dehors du 1V1, à voir pour réadapter
     if isinstance(action, np.ndarray):
         is_shoot = float(action[2]) > 0.1
     else:

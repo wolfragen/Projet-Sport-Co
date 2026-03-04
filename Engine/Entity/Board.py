@@ -7,7 +7,7 @@ Created on Fri Oct 31 15:06:33 2025
 
 import pymunk
 
-import Settings
+from Settings import Settings
 
 
 def buildBoard(space):
