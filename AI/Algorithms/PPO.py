@@ -6,7 +6,7 @@ from AI.Network import DeepRLNetwork
 from Engine.Environment import LearningEnvironment
 from AI.Algorithms.DQN import runTests
 from AI.Algorithms.RANDOM import RandomAgent
-from runTests_multi_thread import get_executor, runTests_multithread
+from AI.Algorithms.runTests_multi_thread import runTests_multithread
 
 import copy
 import random
@@ -501,7 +501,6 @@ def train_PPO_competitive(
                     scoring_function=model.scoring_function,
                     reward_coeff_dict=model.reward_coeff_dict,
                     max_steps=max_steps_per_game,
-                    training_progression=1.0,
                     nb_tests=100,
                     n_workers=n_workers)
 
