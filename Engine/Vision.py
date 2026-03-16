@@ -207,13 +207,12 @@ def getVision(space, players: list[tuple[pymunk.Body, pymunk.Shape]], player_id,
                 dx_other_player_ball = -dx_other_player_ball
                 dy_other_player_ball = -dy_other_player_ball
 
-            vision_array[insert_index:insert_index+3] = (
+            vision_array[insert_index:insert_index+2] = (
                 dx_other_player_ball,
                 dy_other_player_ball,
-                other_shape.left_team,
             )
 
-            insert_index += 3
+            insert_index += 2
             
         """
         # Old version : 

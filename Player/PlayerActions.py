@@ -50,25 +50,46 @@ def process_events() -> None:
         time_last_action = time.time()
         return False,3
     
-    # Rotate left
-    if keys[pygame.K_a]:
-        time_last_action = time.time()
-        return False,1
-
-    # Rotate right
-    if keys[pygame.K_d]:
-        time_last_action = time.time()
-        return False,2
+    if Settings.WEIRD_CONTROL:
+        # Rotate left
+        if keys[pygame.K_q]:
+            time_last_action = time.time()
+            return False,1
     
-    # Backward movement
-    if keys[pygame.K_s]:
-        time_last_action = time.time()
-        return False,4
+        # Rotate right
+        if keys[pygame.K_d]:
+            time_last_action = time.time()
+            return False,2
+        
+        # Backward movement
+        if keys[pygame.K_s]:
+            time_last_action = time.time()
+            return False,4
+        
+        # Forward movement
+        if keys[pygame.K_z]:
+            time_last_action = time.time()
+            return False,0
+    else:
+        # Rotate left
+        if keys[pygame.K_a]:
+            time_last_action = time.time()
+            return False,1
     
-    # Forward movement
-    if keys[pygame.K_w]:
-        time_last_action = time.time()
-        return False,0
+        # Rotate right
+        if keys[pygame.K_d]:
+            time_last_action = time.time()
+            return False,2
+        
+        # Backward movement
+        if keys[pygame.K_s]:
+            time_last_action = time.time()
+            return False,4
+        
+        # Forward movement
+        if keys[pygame.K_w]:
+            time_last_action = time.time()
+            return False,0
         
     return False, -1
         

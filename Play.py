@@ -6,21 +6,32 @@ Created on Fri Oct 31 20:17:10 2025
 """
 
 import pygame
+from time import time
 
 from Graphics.GraphicEngine import startDisplay
 from Engine.Environment import LearningEnvironment
+from Settings import Settings
 
 
 def humanGame(players_number, agents, scoring_function, reward_coeff_dict):
     n_players = players_number[0] + players_number[1]
     assert len(agents) == n_players
+    delta_time = Settings.DELTA_TIME
     
     screen, draw_options = startDisplay()
     env = LearningEnvironment(players_number=players_number, scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict, 
                               display=True, screen=screen, draw_options=draw_options, human=True)
     
+    action = -1
+    while action == -1:
+        temp_continue, action = env._processHumanEvents()
+    
+    human_player = env.selected_player
     while(not env.isDone() and env.display):
-        human_player = env.selected_player
+        start_time = time()
+        temp_continue, action = env._processHumanEvents()
+        if not env.display:
+            break
         
         for player_id in range(n_players):
             agent = agents[player_id]
@@ -30,6 +41,9 @@ def humanGame(players_number, agents, scoring_function, reward_coeff_dict):
                 env.playerAct(player_id, action)
                     
         env.step()
+        action = -1
+        while (time() - start_time)*1000 < delta_time and action == -1:
+            temp_continue, action = env._processHumanEvents()
     
     env._endDisplay()
     return

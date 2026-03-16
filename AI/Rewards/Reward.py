@@ -21,7 +21,7 @@ def computeReward(coeff_dict, player, players_number, action, ball, left_goal_po
     ball_body, ball_shape = ball
     
     reward = 0.0
-        
+    
     alpha, beta = 1.0, 1.0  # relative weights
     
     static_reward = coeff_dict["static_reward"] if "static_reward" in coeff_dict.keys() else None

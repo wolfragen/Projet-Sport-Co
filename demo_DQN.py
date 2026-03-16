@@ -12,7 +12,7 @@ import torch
 
 from Settings import Settings
 from Play import humanGame
-from AI.Algorithms.PPO import PPOAgent
+from AI.Algorithms.DQN import getRandomDQNAgents
 from AI.Rewards.Reward import computeReward
 
 if(__name__ == "__main__"):
@@ -49,10 +49,12 @@ if(__name__ == "__main__"):
     save_folder = Settings.SAVE_FOLDER
     
     players_number = (1,1)
-    Settings.ENTRY_NEURONS=10+(sum(players_number)-1)*2
+    Settings.ENTRY_NEURONS=8
+    Settings.COMPETITIVE_VISION = False
+    Settings.GOAL_LEN = 499
+    Settings.ROUND_CORNER = False
                            
-    dimensions_actor = (Settings.ENTRY_NEURONS, 2**6, 2**6, 2**5, 4)
-    dimensions_critic = (4+sum(players_number)*5, 2**6, 2**6, 2**5, 1)
+    dimensions = (Settings.ENTRY_NEURONS, 2**7, 2**7, 2**6, 3)
 
     scoring_function = computeReward
     fail_reward = -10
@@ -66,19 +68,16 @@ if(__name__ == "__main__"):
         "has_ball_coeff":0
         }
     
-    agent = PPOAgent(dimensions=(dimensions_actor, dimensions_critic), scoring_function=computeReward, reward_coeff_dict=reward_coeff_dict,
-                     rollout_size=2048, lr_actor=1e-4, lr_critic=3e-4, n_epoch=4, lr_decay=False,
-                     clip_eps=0.2, gamma=0.99, lmbda=0.95, critic_loss_coeff=0.5, entropy_loss_coeff=0.01, normalize_advantage=False,
-                     max_grad_norm=1, cuda=cuda)
+    agent = getRandomDQNAgents(n=1, dimensions=dimensions, batch_size=128, lr=3e-4, sync_rate=1000, buffer_size=50_000, 
+                           epsilon_decay=0.99995, linear_decay=True, epsilon=1.0, epsilon_min=0.05, gamma=0.99, soft_update=True, tau=5e-3, 
+                           betas=(0.9, 0.999), eps=1e-8, cuda=False)[0]
     
     
     
     
     ##################################################################################################################################################################
-    agent.load(save_folder + "best_model_1v1.pt")
-    
-    Settings.WEIRD_CONTROL = False
-    
+    agent.load(save_folder + "fail=0.008/0_best")
+
     agents = [None, agent]
     players_number = (1,1)
     humanGame(players_number, agents, scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict)

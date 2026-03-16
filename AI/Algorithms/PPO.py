@@ -6,12 +6,13 @@ from AI.Network import DeepRLNetwork
 from Engine.Environment import LearningEnvironment
 from AI.Algorithms.DQN import runTests
 from AI.Algorithms.RANDOM import RandomAgent
-from runTests_multi_thread import get_executor, runTests_multithread
+from AI.Algorithms.runTests_multi_thread import runTests_multithread
 
 import copy
 import random
 import os
 from collections import deque
+import re
 
 
 # =========================
@@ -220,8 +221,12 @@ class PPOAgent:
     def act(self, state, train=False):
         return self.actor.act(state, train=False)
 
-    def save(self, path):
-        torch.save(self.actor.state_dict(), path)
+    def save(self, actor_path, critic=False, critic_path=None):
+        torch.save(self.actor.state_dict(), actor_path)
+        if(critic):
+            assert critic_path is not None
+            torch.save(self.critic.state_dict(), critic_path)
+        
 
     def load(self, actor_path, critic=False, critic_path=None):
         self.actor.load_state_dict(torch.load(actor_path, map_location=self.device))
@@ -250,7 +255,9 @@ def train_PPO_competitive(
     draw_penalty: float = -0.5,
     max_steps_per_game: int = 2048,
     eval_interval: int = 500,
-    n_workers = 1,
+    n_workers = -1,
+    load_existing = False,
+    load_path = None,
 ):
 
     env = LearningEnvironment(
@@ -485,8 +492,8 @@ def train_PPO_competitive(
             print(">>> Evaluating vs random agent...")
             if n_workers == 1:
                 runTests(
-                    players_number=(1, 1),
-                    agents=[model, random_agent],
+                    players_number=players_number,
+                    agents=[model, model, random_agent, random_agent],
                     scoring_function=model.scoring_function,
                     reward_coeff_dict=model.reward_coeff_dict,
                     max_steps=max_steps_per_game,
@@ -496,12 +503,11 @@ def train_PPO_competitive(
                 )
             else:
                 print(f">>> Running on {n_workers} threads...")
-                runTests_multithread(players_number=(1, 1),
-                    agents=[model, random_agent],
+                runTests_multithread(players_number=players_number,
+                    agents=[model, model, random_agent, random_agent],
                     scoring_function=model.scoring_function,
                     reward_coeff_dict=model.reward_coeff_dict,
                     max_steps=max_steps_per_game,
-                    training_progression=1.0,
                     nb_tests=100,
                     n_workers=n_workers)
 
