@@ -49,6 +49,7 @@ if(__name__ == "__main__"):
     save_folder = Settings.SAVE_FOLDER
     
     players_number = (1,1)
+    Settings.PLAYERS_NUMBER = players_number
     Settings.ENTRY_NEURONS=8
     Settings.COMPETITIVE_VISION = False
     Settings.GOAL_LEN = 499
@@ -77,6 +78,8 @@ if(__name__ == "__main__"):
     
     ##################################################################################################################################################################
     agent.load(save_folder + "fail=0.008/0_best")
+    
+    Settings.WEIRD_CONTROL = False
 
     agents = [None, agent]
     players_number = (1,1)

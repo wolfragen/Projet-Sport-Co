@@ -24,9 +24,10 @@ from Graphics.GraphicEngine import startDisplay
 from Engine.Environment import LearningEnvironment
 
 class DQNAgent:
-    def __init__(self, dimensions, batch_size, lr, sync_rate, buffer_size, epsilon_decay, linear_decay=True, 
+    def __init__(self, dimensions, batch_size, lr, sync_rate, buffer_size, epsilon_decay, linear_decay=True,
                  epsilon=1.0, epsilon_min=0.05, gamma=0.99, betas=(0.9, 0.999), eps=1e-8, soft_update=True, tau=5e-3,
                  random=False, cuda=False):
+        self.dimensions = dimensions
         self.batch_size = batch_size
         self.action_dim = dimensions[-1]
         self.lr = lr
@@ -81,6 +82,15 @@ class DQNAgent:
         state_tensor = torch.tensor(state, dtype=torch.float32, device=self.device).unsqueeze(0)
         q_values = self.onlineNetwork(state_tensor)
         return q_values.argmax(dim=1).item()
+
+    @torch.no_grad()
+    def batch_act(self, states_batch):
+        """Batch inference: states (batch, state_dim) → actions (batch,)"""
+        if self.random:
+            return np.random.randint(self.action_dim, size=len(states_batch))
+        states_t = torch.as_tensor(np.ascontiguousarray(states_batch), dtype=torch.float32, device=self.device)
+        q_values = self.onlineNetwork(states_t)
+        return q_values.argmax(dim=1).cpu().numpy()
 
     def remember(self, state, action, reward, next_state, done, td_priority=1.0):
         transition = TensorDict(
@@ -158,6 +168,15 @@ class DQNAgent:
                 target_param.data.mul_(1.0 - self.tau)
                 target_param.data.add_(self.tau * online_param.data)
 
+    def to_proxy(self):
+        from AI.AgentProxy import AgentProxy
+        return AgentProxy(
+            state_dict=self.onlineNetwork.state_dict(),
+            dimensions=list(self.dimensions),
+            agent_type="dqn",
+            device=str(self.device)
+        )
+
     def save(self, path):
         torch.save(self.onlineNetwork.state_dict(), path)
 
@@ -186,53 +205,61 @@ class EpisodeResult:
     score: tuple[int,int]
     success: bool
     display: bool
-    total_reward_dict: dict
+    total_reward_dict: dict = None
 
-def trainingGame(players_number, agents, scoring_function, reward_coeff_dict, max_steps, training_progression, train=True, 
+def trainingGame(players_number, agents, scoring_function, reward_coeff_dict, max_steps, training_progression, train=True,
                  display=False, simulation_speed=1.0, screen=None, draw_options=None, gather_data=False):
     n_players = players_number[0] + players_number[1]
-    
-    env = LearningEnvironment(players_number=players_number, scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict, 
-                              training_progression=training_progression, display=display, simulation_speed=simulation_speed, screen=screen, 
+
+    env = LearningEnvironment(players_number=players_number, scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict,
+                              training_progression=training_progression, display=display, simulation_speed=simulation_speed, screen=screen,
                               draw_options=draw_options, human=False)
     step = 1
-    
+
+    use_fast = hasattr(env.engine, 'full_step') and not display
     states = [env.getState(player_id) for player_id in range(n_players)]
     done = False
-    
+
     total_reward = 0
-    actions = [None for _ in range(n_players)]
-    
+    actions_list = [0] * n_players
+
     while(not done):
-        
+
         for player_id in range(n_players):
-            agent = agents[player_id]
-            state = states[player_id]
-            action = agent.act(state, train=train)
-            env.playerAct(player_id, action)
-                
-            states[player_id] = state
-            actions[player_id] = action
-        
-        rewards = env.step()
-        done = (env.isDone() or step>=max_steps)
-        
-        for player_id in range(n_players):
-            state = states[player_id]
-            next_state = env.getState(player_id)
-            action = actions[player_id]
-            reward = rewards[player_id]
-            
-            if(train):
-                agent.remember(state, action, reward, next_state, done)
-                if(not gather_data): # on entraine pas sur les données de départ.
-                    agent.replay()
-            
-            states[player_id] = next_state
-            total_reward += reward
-            
+            actions_list[player_id] = agents[player_id].act(states[player_id], train=train)
+
+        if use_fast:
+            visions, gv, rewards, done_flag = env.fast_step(actions_list)
+            done = done_flag or step >= max_steps
+
+            for player_id in range(n_players):
+                next_state = visions[player_id]
+                if train:
+                    agents[player_id].remember(states[player_id], actions_list[player_id],
+                                               float(rewards[player_id]), next_state, done)
+                    if not gather_data:
+                        agents[player_id].replay()
+                total_reward += float(rewards[player_id])
+                states[player_id] = next_state
+        else:
+            for player_id in range(n_players):
+                env.playerAct(player_id, actions_list[player_id])
+            step_rewards = env.step()
+            done = env.isDone() or step >= max_steps
+
+            for player_id in range(n_players):
+                next_state = env.getState(player_id)
+                if train:
+                    agents[player_id].remember(states[player_id], actions_list[player_id],
+                                               step_rewards[player_id], next_state, done)
+                    if not gather_data:
+                        agents[player_id].replay()
+                total_reward += step_rewards[player_id]
+                states[player_id] = next_state
+
         step += 1
-    return EpisodeResult(total_reward=total_reward, actions=None, steps=step-1, score=env.score, success=env.isDone(), display=env.display)
+    score = env.engine._score if use_fast else env.score
+    return EpisodeResult(total_reward=total_reward, actions=None, steps=step-1, score=score, success=done, display=env.display)
 
 
 def update_moyennes(result, stats):
@@ -310,18 +337,18 @@ def init_stats(nb_moyenne):
 
 def update_best_network(agents, players_number, scoring_function, reward_coeff_dict, max_steps, stats, save_folder):
     if(agents[0].epsilon == agents[0].epsilon_min or agents[0].epsilon <= 0.2):
-        r, s, s_left, s_right, fail_percent = runTests(players_number=players_number, agents=agents, 
-                                                       scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict, 
+        r, s, s_left, s_right, fail_percent = runTests(players_number=players_number, agents=agents,
+                                                       scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict,
                                                        max_steps=max_steps, nb_tests=100, should_print=False)
         stats["fail_percent_history"].append(fail_percent)
         stats["reward_history_test"].append(r)
         stats["step_history_test"].append(s)
-        
+
         if(fail_percent < stats["min_fail_percent"] and (stats["min_fail_percent"]-fail_percent >= 0.01 or fail_percent < stats["min_fail_percent"]*4/5)):
             # Enlever la partie aléatoire : on regarde sur 1000 tests si on a eu un bon résultat.
-            
-            r, s, s_left, s_right, fail_percent = runTests(players_number=players_number, agents=agents, 
-                                                           scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict, 
+
+            r, s, s_left, s_right, fail_percent = runTests(players_number=players_number, agents=agents,
+                                                           scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict,
                                                            max_steps=max_steps, nb_tests=1000, should_print=False)
             if(fail_percent < stats["min_fail_percent"]):
                 stats["min_fail_percent"] = fail_percent
@@ -359,55 +386,55 @@ def save_stats(agents, stats, save_folder):
     df.to_csv(save_folder + "training_data.csv", index=False)
     
 
-def dqn_train(players_number, agents, scoring_function, reward_coeff_dict, num_episodes, save_folder, wait_rate=0.1, exploration_rate=0.8, 
+def dqn_train(players_number, agents, scoring_function, reward_coeff_dict, num_episodes, save_folder, wait_rate=0.1, exploration_rate=0.8,
           starting_max_steps=100, ending_max_steps=1000, display=False, simulation_speed=1.0, moyenne_ratio=0.1, end_test=True):
     assert len(agents) == players_number[0] + players_number[1]
     if(save_folder != None and save_folder[-1] != "/"):
         save_folder += "/"
-    
+
     num_wait = round(num_episodes*wait_rate)
     max_steps_decay = math.exp(math.log(ending_max_steps/starting_max_steps)/((num_episodes-num_wait)*exploration_rate))
-    
+
     max_steps = starting_max_steps
-    
+
     screen, draw_options = None,None
     if(display):
         screen, draw_options = startDisplay()
-    
+
     nb_moyenne = round(num_episodes*moyenne_ratio)
     stats = init_stats(nb_moyenne)
-    
-    display = gather_data(players_number, agents, scoring_function, reward_coeff_dict, max_steps, screen, draw_options, 
+
+    display = gather_data(players_number, agents, scoring_function, reward_coeff_dict, max_steps, screen, draw_options,
                     stats, display=display, simulation_speed=simulation_speed)
-    
+
     print("Starting training")
     start = time.time()
-    
+
     for episode in range(num_episodes):
-        
-        result = trainingGame(players_number=players_number, agents=agents, scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict, 
-                              max_steps=max_steps, training_progression=min(1,(episode+1)/(num_episodes*exploration_rate)), 
+
+        result = trainingGame(players_number=players_number, agents=agents, scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict,
+                              max_steps=max_steps, training_progression=min(1,(episode+1)/(num_episodes*exploration_rate)),
                               display=display, simulation_speed=simulation_speed, screen=screen, draw_options=draw_options, gather_data=False)
-        
+
         display = result.display
         update_moyennes(result, stats)
-        
+
         if((episode+1) > num_wait):
             max_steps = min(ending_max_steps, max_steps*max_steps_decay)
             for agent in agents:
                 agent.decayEpsilon()
-        
+
         if((episode+1) % 100 == 0):
             # Progress Bar
             progress_bar(episode, agents, num_episodes, start, stats)
-            
+
             early_stop = update_best_network(agents, players_number, scoring_function, reward_coeff_dict, max_steps, stats, save_folder)
             if(early_stop):
                 break
-    
+
     if(save_folder != None):
         save_stats(agents, stats, save_folder)
-    
+
     if(end_test):
         print()
         print("="*100)
@@ -416,8 +443,8 @@ def dqn_train(players_number, agents, scoring_function, reward_coeff_dict, num_e
         print()
         print("="*100)
         print()
-        
-        runTests(players_number=players_number, agents=agents, scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict, 
+
+        runTests(players_number=players_number, agents=agents, scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict,
                  max_steps=max_steps)
         
 
@@ -426,81 +453,78 @@ def dqn_train(players_number, agents, scoring_function, reward_coeff_dict, num_e
 
 def testingGame(players_number, agents, scoring_function, reward_coeff_dict, max_steps, training_progression):
     n_players = players_number[0] + players_number[1]
-    
-    env = LearningEnvironment(players_number=players_number, scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict, 
+
+    env = LearningEnvironment(players_number=players_number, scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict,
                               training_progression=training_progression, display=False, human=False)
     step = 1
-    
+
+    use_fast = hasattr(env.engine, 'full_step')
     states = [env.getState(player_id) for player_id in range(n_players)]
     done = False
-    
+
     total_reward = 0
     total_reward_dict = {
-        "static_reward": 0,
-        "delta_ball_goal_reward": 0,
-        "delta_ball_player_reward": 0,
-        "can_shoot_reward": 0,
-        "has_ball_reward": 0,
-        "goal_reward": 0,
-        "total_reward": 0,
-        }
-    actions = [[] for _ in range(n_players)]
-    
-    while(not done):
-        
-        for player_id in range(n_players):
-            agent = agents[player_id]
-            state = states[player_id]
-            action = agent.act(state, train=False)
-            env.playerAct(player_id, action)
-                
-            states[player_id] = state
-            actions[player_id].append(action)
-        
-        rewards = env.step(debug=True)
-        done = (env.isDone() or step>=max_steps)
-        
-        for player_id in range(n_players):
-            state = states[player_id]
-            next_state = env.getState(player_id)
-            action = actions[player_id][step-1]
-            reward = rewards[player_id][0]
-            
-            states[player_id] = next_state
-            total_reward += reward
-            
-            reward_dict = rewards[player_id][1]
-            for key,value in reward_dict.items():
-                total_reward_dict[key] += value
-            
-        step += 1
-    return EpisodeResult(total_reward=total_reward, actions=actions, steps=step-1, score=env.score, success=env.isDone(), display=env.display, total_reward_dict=total_reward_dict)
+        "static_reward": 0, "delta_ball_goal_reward": 0, "delta_ball_player_reward": 0,
+        "can_shoot_reward": 0, "has_ball_reward": 0, "goal_reward": 0, "total_reward": 0,
+    }
 
-def runTests(players_number, agents, scoring_function, reward_coeff_dict, max_steps, training_progression=1.0, nb_tests=10_000, should_print=True):
-    
+    while(not done):
+        actions_list = [agents[pid].act(states[pid], train=False) for pid in range(n_players)]
+
+        if use_fast:
+            visions, gv, rewards, done_flag = env.fast_step(actions_list)
+            done = done_flag or step >= max_steps
+            for pid in range(n_players):
+                total_reward += float(rewards[pid])
+                states[pid] = visions[pid]
+        else:
+            for pid in range(n_players):
+                env.playerAct(pid, actions_list[pid])
+            rewards = env.step(debug=True)
+            done = env.isDone() or step >= max_steps
+            for pid in range(n_players):
+                states[pid] = env.getState(pid)
+                total_reward += rewards[pid][0]
+                rd = rewards[pid][1]
+                for k, v in rd.items():
+                    total_reward_dict[k] += v
+
+        step += 1
+    score = env.engine._score if use_fast else env.score
+    return EpisodeResult(total_reward=total_reward, actions=None, steps=step-1, score=score, success=done, display=env.display, total_reward_dict=total_reward_dict)
+
+def runTests(players_number, agents, scoring_function, reward_coeff_dict, max_steps, training_progression=1.0, nb_tests=10_000, should_print=True, testing_pool=None):
+    from Settings import Settings
+
+    # Vectorized path (fastest): single process, batched Numba kernel
+    if Settings.N_WORKERS > 1 and Settings.PHYSICS_ENGINE == "numba":
+        from AI.Algorithms.parallel_testing import batched_run_tests
+        return batched_run_tests(agents, nb_tests, max_steps, players_number, reward_coeff_dict,
+                                 training_progression, should_print)
+
+    # Multiprocessing path (fallback if not numba)
+    if testing_pool is not None:
+        return testing_pool.run_tests(agents, nb_tests, max_steps, training_progression, should_print)
+
+    # Sequential path
     rewards = 0
     rewards_dict = {
-        "static_reward": 0,
-        "delta_ball_goal_reward": 0,
-        "delta_ball_player_reward": 0,
-        "can_shoot_reward": 0,
-        "has_ball_reward": 0,
-        "goal_reward": 0,
-        "total_reward": 0,
-        }
+        "static_reward": 0, "delta_ball_goal_reward": 0, "delta_ball_player_reward": 0,
+        "can_shoot_reward": 0, "has_ball_reward": 0, "goal_reward": 0, "total_reward": 0,
+    }
     steps = 0
     nb_fail = 0
     nb_not_draw = 0
     score_left = 0
     score_right = 0
-    
+
     start_time = time.time()
-    
+
     for episode in range(nb_tests):
-        
-        result = testingGame(players_number=players_number, agents=agents, scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict, 
+
+        result = testingGame(players_number=players_number, agents=agents, scoring_function=scoring_function, reward_coeff_dict=reward_coeff_dict,
                              max_steps=max_steps, training_progression=training_progression)
-        
+
         score = result.score
         if(score[0]+score[1]!=0):
             nb_not_draw+=1
@@ -508,18 +532,19 @@ def runTests(players_number, agents, scoring_function, reward_coeff_dict, max_st
             steps += result.steps
             score_left += score[0]
             score_right += score[1]
-            
-            reward_dict = result.total_reward_dict
-            for key,value in reward_dict.items():
-                rewards_dict[key] += value
-        
+
+            if result.total_reward_dict:
+                for key,value in result.total_reward_dict.items():
+                    rewards_dict[key] += value
+
         if(score[0] != 1):
             nb_fail += 1
-        
-        if((episode+1)%(nb_tests/10) == 0 and should_print):
+
+        if((episode+1)%(nb_tests/8) == 0 and should_print):
             print(f"[{round(time.time() - start_time)}s] Tests en cours: {(episode+1)/nb_tests*100}%")
-            
-    
+
+    if nb_not_draw == 0:
+        nb_not_draw = 1
     print(f"[{int(time.time()-start_time)}s] {nb_tests} tests | Reward: {rewards/nb_not_draw:.2f} | W/D/L: {int(score_left)}/{nb_tests-nb_not_draw}/{int(score_right)} | Steps: {steps/nb_not_draw:.1f} | Score: {score_left/nb_tests:.2f} / {score_right/nb_tests:.2f} | failed: {nb_fail/nb_tests:.3f}")
     for key,value in rewards_dict.items():
         new_val = value/nb_not_draw

@@ -13,3 +13,6 @@ class RandomAgent:
         
     def act(self, state, train):
         return np.random.randint(self.action_dim)
+
+    def batch_act(self, states_batch):
+        return np.random.randint(self.action_dim, size=len(states_batch))

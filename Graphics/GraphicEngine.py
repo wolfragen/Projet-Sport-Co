@@ -5,117 +5,88 @@ Created on Sat Oct 11 16:35:38 2025
 @author: quent
 """
 
+import math
 import pygame
-import pymunk
-import pymunk.pygame_util
 from PIL import Image, ImageDraw, ImageFont
 
 from Settings import Settings
 
 
 def initScreen():
-    """
-    Initialize the Pygame window and Pymunk drawing options.
-
-    This function sets up the game display using the defined settings 
-    (screen dimensions and offset) and returns the Pygame surface and 
-    corresponding Pymunk drawing options used to render the game.
-
-    Returns
-    -------
-    tuple
-        screen : pygame.Surface  
-            The main Pygame display surface used for rendering the game.  
-        draw_options : pymunk.pygame_util.DrawOptions  
-            The drawing configuration object for rendering Pymunk objects.
-    """
-    
-    # Create the Pygame window with defined dimensions and offset
     screen = pygame.display.set_mode((
         Settings.DIM_X + Settings.SCREEN_OFFSET * 2,
         Settings.DIM_Y + Settings.SCREEN_OFFSET * 2
     ))
-    
-    # Initialize Pymunk draw options (for visualizing physics objects)
-    draw_options = pymunk.pygame_util.DrawOptions(screen)
-    
-    # Return both display surface and drawing configuration
-    return screen, draw_options
+    return screen
+
 
 def startDisplay():
     pygame.init()
-    screen, draw_options = initScreen()
-    return screen, draw_options
+    screen = initScreen()
+    return screen, None  # draw_options no longer needed
 
 
-def display(space, players, score, screen: pygame.Surface, draw_options: "pymunk.pygame_util.DrawOptions") -> None:
-    # Clear the screen to a blank state
+def display(engine, score, screen: pygame.Surface, draw_options=None) -> None:
     clear_screen(screen)
-    
-    # Draw all game objects, including players and arrows
-    draw_objects(space, players, draw_options, screen)
-    
-    # Draw the current score
+    render_data = engine.get_render_data()
+    draw_objects(render_data, screen)
     draw_score(score, screen)
-    
-    # Update the full display surface to the screen
     pygame.display.flip()
-    
-    return
 
 
 def clear_screen(screen: pygame.Surface):
-    """
-    Clear the given Pygame screen by filling it with white color.
-
-    Parameters
-    ----------
-    screen : pygame.Surface
-        The Pygame surface to clear.
-
-    Returns
-    -------
-    None
-        The screen is cleared in-place.
-    """
-    
-    # Fill the screen with white to reset previous drawings
     screen.fill(Settings.BACKGROUND_COLOR)
-    return
 
 
-def draw_objects(space, players, draw_options: "pymunk.pygame_util.DrawOptions", screen: pygame.Surface) -> None:
-    # Draw all shapes using pymunk debug draw
-    space.debug_draw(draw_options)
-    
-    arrow_color = Settings.PLAYER_ARROW_COLOR
+def draw_objects(render_data: dict, screen: pygame.Surface) -> None:
+    # Draw walls (grey, matching pymunk debug_draw style)
+    wall_color = (104, 104, 104)
+    for a, b, radius in render_data.get("walls", []):
+        pygame.draw.line(screen, wall_color, (int(a[0]), int(a[1])), (int(b[0]), int(b[1])), max(1, int(radius * 2)))
+
+    # Draw ball with angle indicator line (matching pymunk debug_draw)
+    ball = render_data.get("ball")
+    if ball is not None:
+        bx, by = ball["position"]
+        pos = (int(bx), int(by))
+        color = ball["color"][:3]
+        r = ball["radius"]
+        pygame.draw.circle(screen, color, pos, r)
+        # Angle indicator line inside the ball
+        angle = ball.get("angle", 0)
+        end_x = bx + r * math.cos(angle)
+        end_y = by + r * math.sin(angle)
+        pygame.draw.line(screen, (0, 0, 0), pos, (int(end_x), int(end_y)), 1)
+
+    arrow_color = Settings.PLAYER_ARROW_COLOR[:3]
     arrow_size = Settings.PLAYER_LEN / 4
-    
+
     # Draw players and their directional arrows
-    for body, shape in players:
+    for player in render_data["players"]:
         # Draw the player's square body
-        points = [p.rotated(body.angle) + body.position for p in shape.get_vertices()]
-        pygame.draw.polygon(screen, shape.color, points)
-        
-        # Define local coordinates for the arrow (triangle)
-        back = pymunk.Vec2d(-arrow_size, 0)     # back of the player
-        front = pymunk.Vec2d(arrow_size, 0)     # front of the player
-        top = pymunk.Vec2d(0, -arrow_size)      # top point of arrow
-        bottom = pymunk.Vec2d(0, arrow_size)    # bottom point of arrow
-        
-        # Rotate and translate points according to the player's body
-        back_world = back.rotated(body.angle) + body.position
-        front_world = front.rotated(body.angle) + body.position
-        top_world = top.rotated(body.angle) + body.position
-        bottom_world = bottom.rotated(body.angle) + body.position
-        
-        # Draw the central line of the arrow
-        pygame.draw.line(screen, arrow_color, back_world, front_world, 2)
-        # Draw the two lines forming the arrowhead
-        pygame.draw.line(screen, arrow_color, front_world, top_world, 2)
-        pygame.draw.line(screen, arrow_color, front_world, bottom_world, 2)
-        
-    return
+        vertices = [(int(x), int(y)) for x, y in player["vertices"]]
+        color = player["color"][:3]
+        pygame.draw.polygon(screen, color, vertices)
+
+        pos = player["position"]
+        angle = player["angle"]
+
+        # Arrow points in local space, rotated and translated
+        def rotate_point(lx, ly):
+            cos_a = math.cos(angle)
+            sin_a = math.sin(angle)
+            rx = lx * cos_a - ly * sin_a
+            ry = lx * sin_a + ly * cos_a
+            return (pos[0] + rx, pos[1] + ry)
+
+        back = rotate_point(-arrow_size, 0)
+        front = rotate_point(arrow_size, 0)
+        top = rotate_point(0, -arrow_size)
+        bottom = rotate_point(0, arrow_size)
+
+        pygame.draw.line(screen, arrow_color, back, front, 2)
+        pygame.draw.line(screen, arrow_color, front, top, 2)
+        pygame.draw.line(screen, arrow_color, front, bottom, 2)
 
 
 def draw_score(score, screen: pygame.Surface) -> None:
@@ -123,76 +94,26 @@ def draw_score(score, screen: pygame.Surface) -> None:
     text = f"{int(score_left)}   -   {int(score_right)}"
     text_color = Settings.SCORE_COLOR
 
-    # Load font using PIL (Arial, size 36)
     try:
-        font = ImageFont.truetype("arial.ttf", 36)  # TrueType font
+        font = ImageFont.truetype("arial.ttf", 36)
     except IOError:
-        font = ImageFont.load_default()  # Fallback if Arial unavailable
+        font = ImageFont.load_default()
 
-    # Calculate text size
     text_bbox = font.getbbox(text)
     text_width = text_bbox[2] - text_bbox[0]
     text_height = text_bbox[3] - text_bbox[1]
 
-    # Create transparent PIL image
     pad_x, pad_y = 5, 5
     img = Image.new("RGBA", (text_width + 2*pad_x, text_height + 2*pad_y), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
-    draw.text((0, 0), text, font=font, fill=text_color + (255,))  # 255 = alpha
+    draw.text((0, 0), text, font=font, fill=text_color + (255,))
 
-    # Convert PIL image to Pygame surface
     mode = img.mode
     size = img.size
     data = img.tobytes()
     surf = pygame.image.fromstring(data, size, mode)
 
-    # Center horizontally on screen
     screen_width = Settings.DIM_X + 2 * Settings.SCREEN_OFFSET
     pos = (screen_width // 2 - text_width // 2, 20)
 
     screen.blit(surf, pos)
-    
-    return
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

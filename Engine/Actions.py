@@ -6,201 +6,59 @@ Created on Sat Oct 11 19:32:28 2025
 """
 
 import math
-import numpy as np
-import pymunk
 
 from Settings import Settings
 
-def reset_movements(players) -> None:
-    """
-    Reset all player movements by stopping their current velocity.
 
-    Parameters
-    ----------
-    game : dict
-        The game dictionary containing the list of players.
+def reset_movements(engine) -> None:
+    """Reset all player movements by stopping their current velocity."""
+    for player_id in range(engine.get_n_players()):
+        move(engine, player_id, speed=0, rotation_speed=0)
 
-    Returns
-    -------
-    None
-        This function does not return any value.
-    """
-    
-    # Iterate over all players and reset their movement
-    for player in players:
-        move(player, speed=0, rotation_speed=0)
-    
-    return
 
-def define_previous_pos(players, ball) -> None:
-    for player in players:
-        body, _ = player
-        body.previous_position = body.position
-        body.previous_angle = body.angle
-        
-    body, _ = ball
-    body.previous_position = body.position
-    
-    return
+def move(engine, entity_id: int, speed: float = 0, rotation_speed: float = 0) -> None:
+    """Apply linear and angular velocity to an entity (player or ball)."""
+    angle = engine.get_angle(entity_id)
 
-def move(entity: tuple[pymunk.Body, pymunk.Shape], speed: float = 0, rotation_speed: float = 0) -> None:
-    """
-    Apply linear and angular velocity to an entity (player or object).
-
-    Parameters
-    ----------
-    entity : tuple[pymunk.Body, pymunk.Shape]
-        Tuple containing the Pymunk body and shape of the entity.
-    speed : float, optional
-        Forward speed to apply along the entity's current angle (default is 0).
-    rotation_speed : float, optional
-        Angular velocity to apply (default is 0).
-
-    Returns
-    -------
-    None
-        The entity's velocity and angular_velocity are updated in-place.
-    """
-    
-    body, shape = entity
-    angle = body.angle
-
-    # Compute velocity components along the entity's facing direction
     vx = speed * math.cos(angle)
     vy = speed * math.sin(angle)
 
-    # Apply linear velocity
-    body.velocity = vx, vy
+    engine.set_velocity(entity_id, vx, vy)
+    engine.set_angular_velocity(entity_id, rotation_speed)
 
-    # Apply angular velocity
-    body.angular_velocity = rotation_speed
-    
-    return
 
-def shoot(player: tuple[pymunk.Body, pymunk.Shape],
-          ball: tuple[pymunk.Body, pymunk.Shape],
-          power: float = 1.0) -> None:
-    """
-    Make a player shoot the ball in the direction the player is facing.
-
-    Parameters
-    ----------
-    player : tuple[pymunk.Body, pymunk.Shape]
-        Tuple containing the player's Pymunk body and shape.
-    ball : tuple[pymunk.Body, pymunk.Shape]
-        Tuple containing the ball's Pymunk body and shape.
-    power : float, optional
-        Multiplier for the shot's speed (default is 1.0).
-
-    Returns
-    -------
-    None
-        Updates the ball's velocity and angle in-place.
-    """
-    
-    ball_body, ball_shape = ball
-    player_body, player_shape = player
-    
-    # Only allow shooting if ball is reachable
-    if not player_body.canShoot:
+def shoot(engine, player_id: int, power: float = 1.0) -> None:
+    """Make a player shoot the ball in the direction the player is facing."""
+    if not engine.get_can_shoot(player_id):
         return
-    
-    # Compute the shooting speed: current player speed + base shooting speed scaled by power
-    shooting_speed = np.linalg.norm(player_body.velocity) + Settings.SHOOTING_SPEED * power
 
-    # Align the ball angle with the player
-    ball_body.angle = player_body.angle
+    vx, vy = engine.get_velocity(player_id)
+    player_speed = math.sqrt(vx * vx + vy * vy)
+    shooting_speed = player_speed + Settings.SHOOTING_SPEED * power
 
-    # Apply velocity to the ball in the player's facing direction
-    move(ball, speed=shooting_speed)
-    
-    ball_body.last_player_shoot = player_body.player_id
-    
-    return
-        
-def canShoot(player_body: pymunk.Body,
-             ball_body: pymunk.Body,
-             max_distance: float = Settings.PLAYER_SHOOTING_RANGE) -> bool:
-    """
-    Check if a player can shoot the ball based on the distance from the front face of the player 
-    to the edge of the ball.
+    player_angle = engine.get_angle(player_id)
+    engine.set_angle(-1, player_angle)
 
-    Parameters
-    ----------
-    player_body : pymunk.Body
-        The Pymunk body of the player.
-    ball_body : pymunk.Body
-        The Pymunk body of the ball.
-    max_distance : float, optional
-        Maximum distance allowed from the player's front face to the ball's edge to be able to shoot 
-        (default is Settings.PLAYER_SHOOTING_RANGE).
+    move(engine, -1, speed=shooting_speed)
 
-    Returns
-    -------
-    bool
-        True if the player can shoot, False otherwise.
-    """
-    
-    # Calculate the center position of the player's front face
+    engine.set_last_player_shoot(player_id)
+
+
+def canShoot(engine, player_id: int, max_distance: float = Settings.PLAYER_SHOOTING_RANGE) -> bool:
+    """Check if a player can shoot the ball based on distance from front face to ball edge."""
     front_offset = Settings.PLAYER_LEN / 2
-    angle = player_body.angle
-    front_pos = player_body.position + np.array([
-        front_offset * np.cos(angle),
-        front_offset * np.sin(angle)
-    ])
+    px, py = engine.get_position(player_id)
+    angle = engine.get_angle(player_id)
 
-    # Vector to the ball and distance
-    ball_pos = np.array(ball_body.position)
-    distance = np.linalg.norm(front_pos - ball_pos)
+    front_x = px + front_offset * math.cos(angle)
+    front_y = py + front_offset * math.sin(angle)
 
-    # Distance from front face to the edge of the ball
-    distance_to_edge = distance - Settings.BALL_RADIUS
+    bx, by = engine.get_position(-1)
+
+    dx = front_x - bx
+    dy = front_y - by
+    distance = math.sqrt(dx * dx + dy * dy)
+
+    distance_to_edge = distance - engine.get_ball_radius()
 
     return distance_to_edge <= max_distance
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    

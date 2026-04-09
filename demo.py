@@ -49,6 +49,7 @@ if(__name__ == "__main__"):
     save_folder = Settings.SAVE_FOLDER
     
     players_number = (1,1)
+    Settings.PLAYERS_NUMBER = players_number
     Settings.ENTRY_NEURONS=10+(sum(players_number)-1)*2
                            
     dimensions_actor = (Settings.ENTRY_NEURONS, 2**6, 2**6, 2**5, 4)
@@ -72,10 +73,8 @@ if(__name__ == "__main__"):
                      max_grad_norm=1, cuda=cuda)
     
     
-    
-    
     ##################################################################################################################################################################
-    agent.load(save_folder + "best_model_1v1.pt")
+    agent.load(save_folder + "1v1/actor_199.pt")
     
     Settings.WEIRD_CONTROL = False
     
