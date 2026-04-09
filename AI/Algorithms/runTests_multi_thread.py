@@ -114,7 +114,7 @@ def get_worker_distribution(n_workers: int, n_iter: int) -> list[int]:
     return worker_distribution
 
 def runTests_multithread(players_number, agents, scoring_function, reward_coeff_dict, max_steps, nb_tests=10_000, n_workers = 1):
-    multithread_executor = get_executor(n_workers=n_workers, initargs=((1,1),scoring_function, reward_coeff_dict))
+    multithread_executor = get_executor(n_workers=n_workers, initargs=(players_number,scoring_function, reward_coeff_dict))
     total_rewards = 0
     total_rewards_dict = {
         "static_reward": 0,
