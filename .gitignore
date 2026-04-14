@@ -1,9 +1,6 @@
 # Ignore trained networks / models
 Networks/
 
-# Local settings
-Settings.py
-
 # Serialized objects (neat-config here)
 *.pkl
 
@@ -20,9 +17,6 @@ __pycache__/
 # Numba AOT cache
 *.nbc
 *.nbi
-
-# Main
-main.py
 
 # WSL
 
