@@ -45,15 +45,15 @@ if(__name__ == "__main__"):
     linear_decay = True
 
     scoring_function = computeReward
-    cuda = torch.cuda.is_available()
+    cuda = False #torch.cuda.is_available()
     save_folder = Settings.SAVE_FOLDER
     
     players_number = (1,1)
     Settings.PLAYERS_NUMBER = players_number
     Settings.ENTRY_NEURONS=10+(sum(players_number)-1)*2
                            
-    dimensions_actor = (Settings.ENTRY_NEURONS, 2**6, 2**6, 2**5, 4)
-    dimensions_critic = (4+sum(players_number)*5, 2**6, 2**6, 2**5, 1)
+    dimensions_actor = (Settings.ENTRY_NEURONS, 2**7, 2**6, 2**5, 4)
+    dimensions_critic = (Settings.ENTRY_NEURONS, 2**7, 2**6, 2**5, 1)  # global state: ball(4) + 2*player(5)
 
     scoring_function = computeReward
     fail_reward = -10
@@ -74,7 +74,7 @@ if(__name__ == "__main__"):
     
     
     ##################################################################################################################################################################
-    agent.load(save_folder + "1v1/actor_199.pt")
+    agent.load(save_folder + "1v1/actor_37.pt")
     
     Settings.WEIRD_CONTROL = False
     

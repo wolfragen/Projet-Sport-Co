@@ -216,23 +216,30 @@ def _compute_vision(
         vision_out[9] = rel_vy
 
         insert = 10
-        for other_idx in range(1, n_players + 1):  # 1-based
-            if other_idx == player_idx:
-                continue
-            ox, oy = pos_x[other_idx], pos_y[other_idx]
-            dx_ob = (bx - ox) / dim_x
-            dy_ob = (by - oy) / dim_y
-            if not lt:
-                dx_ob = -dx_ob
-                dy_ob = -dy_ob
-            vision_out[insert] = dx_ob
-            vision_out[insert + 1] = dy_ob
-            insert += 2
-            # Team flag for team training (>2 players)
-            if n_players > 2:
+        # Teammates first, then opponents — ensures left/right symmetry for
+        # the shared policy (otherwise teammate slot depends on player_id).
+        for pass_idx in range(2):
+            want_teammate = (pass_idx == 0)
+            for other_idx in range(1, n_players + 1):  # 1-based
+                if other_idx == player_idx:
+                    continue
                 other_lt = left_team[other_idx]
-                vision_out[insert] = 1.0 if (other_lt == lt) else -1.0
-                insert += 1
+                is_teammate = (other_lt == lt)
+                if is_teammate != want_teammate:
+                    continue
+                ox, oy = pos_x[other_idx], pos_y[other_idx]
+                dx_ob = (bx - ox) / dim_x
+                dy_ob = (by - oy) / dim_y
+                if not lt:
+                    dx_ob = -dx_ob
+                    dy_ob = -dy_ob
+                vision_out[insert] = dx_ob
+                vision_out[insert + 1] = dy_ob
+                insert += 2
+                # Team flag for team training (>2 players)
+                if n_players > 2:
+                    vision_out[insert] = 1.0 if is_teammate else -1.0
+                    insert += 1
 
 
 @njit(cache=True)

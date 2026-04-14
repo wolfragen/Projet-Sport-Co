@@ -352,9 +352,9 @@ class VectorizedEnv:
 # Batched kernel
 # ============================================================
 
-from numba import njit
+from numba import njit, prange
 
-@njit(cache=True)
+@njit(parallel=True, cache=True)
 def _batched_step(
     pos_x, pos_y, vel_x, vel_y, angle, ang_vel,
     prev_pos_x, prev_pos_y, prev_angle,
@@ -379,7 +379,7 @@ def _batched_step(
     vision_out, global_vision_out, rewards_out, done_out,
     active_mask,  # bool array (batch_size,) — skip inactive envs
 ):
-    for env_idx in range(batch_size):
+    for env_idx in prange(batch_size):
         if not active_mask[env_idx]:
             continue
         done_out[env_idx], last_player_shoot[env_idx] = numba_env.full_game_step(

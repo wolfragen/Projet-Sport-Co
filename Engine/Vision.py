@@ -121,30 +121,36 @@ def getVision(engine, player_id, left_goal_position, right_goal_position, phanto
         insert_index = 10
         n_players = engine.get_n_players()
 
-        for other_id in range(n_players):
-            if other_id == player_id:
-                continue
+        # Teammates first, then opponents — ensures left/right symmetry.
+        # Without this, the teammate's slot index depends on player_id, breaking
+        # the shared policy across left/right teams.
+        for pass_teammates in (True, False):
+            for other_id in range(n_players):
+                if other_id == player_id:
+                    continue
+                other_is_teammate = (engine.get_left_team(other_id) == left_team)
+                if other_is_teammate != pass_teammates:
+                    continue
 
-            other_pos_x, other_pos_y = engine.get_position(other_id)
+                other_pos_x, other_pos_y = engine.get_position(other_id)
 
-            dx_other_player_ball = (ball_pos_x - other_pos_x) / dim_x
-            dy_other_player_ball = (ball_pos_y - other_pos_y) / dim_y
+                dx_other_player_ball = (ball_pos_x - other_pos_x) / dim_x
+                dy_other_player_ball = (ball_pos_y - other_pos_y) / dim_y
 
-            if not left_team:
-                dx_other_player_ball = -dx_other_player_ball
-                dy_other_player_ball = -dy_other_player_ball
+                if not left_team:
+                    dx_other_player_ball = -dx_other_player_ball
+                    dy_other_player_ball = -dy_other_player_ball
 
-            vision_array[insert_index:insert_index + 2] = (
-                dx_other_player_ball,
-                dy_other_player_ball,
-            )
-            insert_index += 2
+                vision_array[insert_index:insert_index + 2] = (
+                    dx_other_player_ball,
+                    dy_other_player_ball,
+                )
+                insert_index += 2
 
-            # Team flag for team training (>2 players)
-            if n_players > 2:
-                other_left_team = engine.get_left_team(other_id)
-                vision_array[insert_index] = 1.0 if (other_left_team == left_team) else -1.0
-                insert_index += 1
+                # Team flag for team training (>2 players)
+                if n_players > 2:
+                    vision_array[insert_index] = 1.0 if other_is_teammate else -1.0
+                    insert_index += 1
 
     return vision_array
 
