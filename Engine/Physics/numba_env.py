@@ -166,6 +166,7 @@ def _compute_vision(
     left_goal_x, left_goal_y, right_goal_x, right_goal_y,
     dim_x, dim_y, shooting_speed, player_speed,
     competitive_vision, entry_neurons,
+    score_left, score_right,
     vision_out,  # pre-allocated output array (entry_neurons,)
 ):
     bx, by = pos_x[0], pos_y[0]  # ball
@@ -216,8 +217,8 @@ def _compute_vision(
         vision_out[9] = rel_vy
 
         insert = 10
-        # Teammates first, then opponents — ensures left/right symmetry for
-        # the shared policy (otherwise teammate slot depends on player_id).
+        # Teammates first, then opponents — keeps the slot index of teammates
+        # constant across players for the shared policy.
         for pass_idx in range(2):
             want_teammate = (pass_idx == 0)
             for other_idx in range(1, n_players + 1):  # 1-based
@@ -236,10 +237,16 @@ def _compute_vision(
                 vision_out[insert] = dx_ob
                 vision_out[insert + 1] = dy_ob
                 insert += 2
-                # Team flag for team training (>2 players)
                 if n_players > 2:
                     vision_out[insert] = 1.0 if is_teammate else -1.0
                     insert += 1
+
+        if lt:
+            my_s, opp_s = score_left, score_right
+        else:
+            my_s, opp_s = score_right, score_left
+        vision_out[insert] = my_s / 10.0
+        vision_out[insert + 1] = opp_s / 10.0
 
 
 @njit(cache=True)
@@ -247,6 +254,7 @@ def _compute_global_vision(
     pos_x, pos_y, vel_x, vel_y, angle, left_team,
     n_bodies, n_players,
     dim_x, dim_y, shooting_speed, player_speed,
+    score_left, score_right,
     global_vision_out,  # pre-allocated
 ):
     denom = shooting_speed + player_speed
@@ -263,6 +271,9 @@ def _compute_global_vision(
         global_vision_out[idx + 3] = cos(angle[i])
         global_vision_out[idx + 4] = 1.0 if left_team[i] else -1.0
         idx += 5
+
+    global_vision_out[idx] = score_left / 10.0
+    global_vision_out[idx + 1] = score_right / 10.0
 
 
 # ============================================================
@@ -425,14 +436,35 @@ def full_game_step(
         )
 
     # ----- 9. Check players out of bounds -----
+    # Margin must keep the player's body fully inside the wall (half body +
+    # wall_radius + epsilon), otherwise the next collision step can re-eject
+    # the player outward through a nearby corner or goal opening.
+    margin = player_len * 0.5 + 5.0
+    x_min = screen_offset + margin
+    x_max = dim_x + screen_offset - margin
+    y_min = screen_offset + margin
+    y_max = dim_y + screen_offset - margin
     for idx in range(1, n_players + 1):
         x = pos_x[idx]
-        if x < screen_offset:
-            pos_x[idx] = screen_offset + 10.0
-            prev_pos_x[idx] = pos_x[idx]
-            prev_pos_y[idx] = pos_y[idx]
-        elif x > dim_x + screen_offset:
-            pos_x[idx] = dim_x + screen_offset - 10.0
+        y = pos_y[idx]
+        oob = False
+        if x < x_min:
+            pos_x[idx] = x_min
+            vel_x[idx] = 0.0
+            oob = True
+        elif x > x_max:
+            pos_x[idx] = x_max
+            vel_x[idx] = 0.0
+            oob = True
+        if y < y_min:
+            pos_y[idx] = y_min
+            vel_y[idx] = 0.0
+            oob = True
+        elif y > y_max:
+            pos_y[idx] = y_max
+            vel_y[idx] = 0.0
+            oob = True
+        if oob:
             prev_pos_x[idx] = pos_x[idx]
             prev_pos_y[idx] = pos_y[idx]
 
@@ -445,6 +477,7 @@ def full_game_step(
             left_goal_x, left_goal_y, right_goal_x, right_goal_y,
             dim_x, dim_y, shooting_speed, player_speed,
             competitive_vision, entry_neurons,
+            score[0], score[1],
             vision_out[pid],
         )
 
@@ -453,6 +486,7 @@ def full_game_step(
         pos_x, pos_y, vel_x, vel_y, angle, left_team,
         n_bodies, n_players,
         dim_x, dim_y, shooting_speed, player_speed,
+        score[0], score[1],
         global_vision_out,
     )
 

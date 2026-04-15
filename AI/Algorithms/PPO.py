@@ -363,17 +363,10 @@ def clone_opponent(source: PPOAgent) -> PPOAgent:
 
 
 def _select_opponent(opponent_pool, n_left, n_right, model, random_pick):
-    # Exactly 2 distinct opponents may be active at once (perf): the latest
-    # clone (`opponent_pool[-1]`) and a single `random_pick` chosen by the
-    # caller. Refresh `random_pick` periodically to keep diversity over time.
-    if n_left == 1 and n_right == 1:
-        if random.random() < 0.85:
-            return opponent_pool[-1]   # 85% latest clone
-        return random_pick             # 15% random from pool
-    else:
-        if random.random() < 0.85:
-            return opponent_pool[-1]   # 85% latest
-        return random_pick             # 15% random from pool
+    # Caps active opponents per step to 2 (perf): latest + caller-managed random_pick.
+    if random.random() < 0.85:
+        return opponent_pool[-1]
+    return random_pick
 
 
 def _multi_opponent_batch_act(env_opponents, states_np):
@@ -552,7 +545,6 @@ def solo_training(
                 visions, gvisions, rewards, dones = venv.step(actions_np.reshape(n_envs, 1))
                 step_in_game += 1
 
-                # Vectorized done/reward computation
                 done_timeout = step_in_game >= max_steps_per_game
                 done_ppo     = dones | done_timeout
                 rewards_adj  = rewards[:, 0].copy()
@@ -606,19 +598,17 @@ def solo_training(
                 done_ppo = done or done_timeout
 
                 if done_timeout:
-                    reward += draw_penalty  # timeout draw only
+                    reward += draw_penalty
 
                 model.remember(state, critic_state, logprob, done_ppo, value, action, reward)
                 period_reward += reward
                 transition_count += 1
                 state = next_state
 
-                # Goal: reset positions, keep scores, continue
                 if done and not done_timeout:
                     env.reset_after_goal()
                     state = env.getState(0)
 
-                # Timeout: end of match, stats, full reset
                 if done_timeout:
                     gf = int(env.score[0])
                     total_games += 1
@@ -744,38 +734,29 @@ def one_v_one_training(
     print(f"Starting 1v1 training for {max_duration}s ({num_episodes} replays x {model.rollout_size} transitions) | {n_envs} envs")
     start = time.time()
 
-    # Stats (reset each reporting period)
     period_reward = 0.0
     period_games = 0
     period_goals_for = 0
     period_goals_against = 0
     wins = losses = draws = 0
 
-    # Rolling averages
-    rolling_goals = deque(maxlen=rolling_size)  # (goals_for, goals_against) per match
-    rolling_wins = deque(maxlen=rolling_size)  # 1=win, 0=draw, -1=loss
+    rolling_goals = deque(maxlen=rolling_size)
+    rolling_wins = deque(maxlen=rolling_size)
 
-    # Global counters (total_replays/total_games/total_models already initialized or loaded above)
     next_opponent_save = total_replays + opponent_save_interval
     next_eval = total_replays + eval_interval
     next_notify = total_replays + interval_notify
     use_eval_agent = False
 
-    # Per-env step tracking (persistent across replays — envs are NOT reset between replays)
+    # step_in_game persists across replays — envs are NOT reset between replays
     step_in_game = np.zeros(n_envs, dtype=np.int32) if use_vec else 0
 
-    # Per-env opponent: one opponent per environment, resampled only when that
-    # env's current match ends (timeout). Avoids the "1024 rollouts vs a single
-    # weak clone" collapse, while keeping a coherent opponent within each game.
-    # `random_pick` is refreshed each time a new clone is added to the pool, so
-    # at any moment only 2 distinct opponents are active across all envs.
     random_pick = random.choice(opponent_pool)
     if use_vec:
         env_opponents = [_select_opponent(opponent_pool, 1, 1, model, random_pick) for _ in range(n_envs)]
     else:
         env_opponent = _select_opponent(opponent_pool, 1, 1, model, random_pick)
 
-    # Sequential: init state
     if not use_vec:
         env.reset()
         state = env.getState(0)
@@ -785,7 +766,6 @@ def one_v_one_training(
             print(f"Time limit reached at {total_replays} replays")
             break
 
-        # ---- Collect exactly rollout_size transitions (across all envs) ----
         transition_count = 0
 
         while transition_count < model.rollout_size:
@@ -803,7 +783,6 @@ def one_v_one_training(
                 visions, gvisions, rewards, dones = venv.step(all_actions)
                 step_in_game += 1
 
-                # Vectorized done/reward computation — no per-env Python loop
                 done_timeout = step_in_game >= max_steps_per_game
                 done_ppo     = dones | done_timeout
                 rewards_adj  = rewards[:, 0].copy()
@@ -813,7 +792,6 @@ def one_v_one_training(
                 period_reward  += float(rewards_adj.sum())
                 transition_count += n_envs
 
-                # Per-env loop only for events (goals/timeouts) — O(1) per step on average
                 reset_actions = np.zeros((n_envs, 2), dtype=np.int32)
                 for i in np.where(dones | done_timeout)[0]:
                     done_goal_i    = bool(dones[i])
@@ -855,7 +833,7 @@ def one_v_one_training(
 
             else:
                 action, logprob = model.actor.act(state)
-                critic_state = state  # 1v1: critic = actor state
+                critic_state = state
                 with torch.no_grad():
                     value = model.critic.net(
                         torch.as_tensor(critic_state, dtype=torch.float32, device=model.device).unsqueeze(0)).item()
@@ -879,19 +857,17 @@ def one_v_one_training(
                 score = env.engine._score if hasattr(env.engine, '_score') else env.score
 
                 if done_timeout:
-                    reward += draw_penalty  # timeout draw only
+                    reward += draw_penalty
 
                 model.remember(state, critic_state, logprob, done_ppo, value, action, reward)
                 period_reward += reward
                 transition_count += 1
                 state = next_state
 
-                # Goal: reset positions, keep scores, continue match
                 if done and not done_timeout:
                     env.reset_after_goal()
                     state = env.getState(0)
 
-                # Timeout: end of match, record stats, full reset
                 if done_timeout:
                     gf = int(score[0])
                     ga = int(score[1])
@@ -914,13 +890,11 @@ def one_v_one_training(
                     step_in_game = 0
                     env_opponent = _select_opponent(opponent_pool, 1, 1, model, random_pick)
 
-        # ---- Replay (backprop) on exactly rollout_size transitions ----
         model.reorder_memory_for_gae(n_envs)
         model.replay(0.0, True)
         model.init_memory()
         total_replays += 1
 
-        # ---- Opponent pool update ----
         if total_replays >= next_opponent_save:
             opponent_pool.append(clone_opponent(model))
             if len(opponent_pool) > max_pool_size:
@@ -935,7 +909,6 @@ def one_v_one_training(
             random_pick = random.choice(opponent_pool)
             next_opponent_save += opponent_save_interval
 
-        # ---- Diagnostics ----
         if total_replays >= next_notify:
             if period_games > 0:
                 elapsed = int(time.time() - start)
@@ -946,7 +919,6 @@ def one_v_one_training(
                 loss_pct = losses / period_games * 100
                 draw_pct = draws / period_games * 100
 
-                # Rolling averages
                 r_win = sum(1 for w in rolling_wins if w == 1) / max(len(rolling_wins), 1) * 100
                 r_gf = np.mean([g[0] for g in rolling_goals]) if rolling_goals else 0
                 r_ga = np.mean([g[1] for g in rolling_goals]) if rolling_goals else 0
@@ -965,7 +937,6 @@ def one_v_one_training(
                 wins = losses = draws = 0
             next_notify += interval_notify
 
-        # ---- Evaluation ----
         if total_replays >= next_eval:
             if eval_agent is not None and use_eval_agent:
                 print(">>> Evaluating vs eval agent...")
@@ -1064,7 +1035,6 @@ def team_training(
     rolling_goals = deque(maxlen=rolling_size)
     rolling_wins = deque(maxlen=rolling_size)
 
-    # total_replays/total_games/total_models already initialized or loaded above
     next_opponent_save = total_replays + opponent_save_interval
     next_eval = total_replays + eval_interval
     next_notify = total_replays + interval_notify
@@ -1072,11 +1042,6 @@ def team_training(
 
     step_in_game = np.zeros(n_envs, dtype=np.int32) if use_vec else 0
 
-    # Per-env opponent: one opponent per environment, resampled only when that
-    # env's match ends (timeout). Avoids long streaks against a single weak
-    # clone while keeping a coherent opponent within each game.
-    # `random_pick` is refreshed each time a new clone is added to the pool, so
-    # at any moment only 2 distinct opponents are active across all envs.
     random_pick = random.choice(opponent_pool)
     if use_vec:
         env_opponents = [_select_opponent(opponent_pool, n_left, n_right, model, random_pick) for _ in range(n_envs)]
@@ -1098,19 +1063,17 @@ def team_training(
         while transition_count < model.rollout_size:
 
             if use_vec:
-                # Critic: one forward pass per env (global state)
                 critic_t = torch.as_tensor(np.ascontiguousarray(gvisions), dtype=torch.float32, device=model.device)
                 with torch.no_grad():
-                    values_t = model.critic.net(critic_t).squeeze(-1)  # (n_envs,)
+                    values_t = model.critic.net(critic_t).squeeze(-1)
 
-                # Actor: one forward pass for all n_left players stacked
-                # Layout: [e0p0, e0p1, e1p0, e1p1, ...] — matches interleaved memory order
+                # Interleaved layout: [e0p0, e0p1, e1p0, e1p1, ...] — matches PPO memory order
                 left_states_np = np.ascontiguousarray(visions[:, :n_left].reshape(n_envs * n_left, -1))
                 left_t = torch.as_tensor(left_states_np, dtype=torch.float32, device=model.device)
                 with torch.no_grad():
                     probs    = model.actor.net(left_t)
                     dist     = torch.distributions.Categorical(probs)
-                    actions_t  = dist.sample()    # (n_envs*n_left,)
+                    actions_t  = dist.sample()
                     logprobs_t = dist.log_prob(actions_t)
 
                 all_actions = np.zeros((n_envs, n_players), dtype=np.int32)
@@ -1121,27 +1084,22 @@ def team_training(
                 visions, gvisions, rewards, dones = venv.step(all_actions)
                 step_in_game += 1
 
-                # Vectorized done/reward computation
                 done_timeout  = step_in_game >= max_steps_per_game
                 done_ppo      = dones | done_timeout
-                # Mixed reward: (1-ratio)*individual + ratio*team_mean
-                indiv_rewards = rewards[:, :n_left]  # (n_envs, n_left)
-                team_mean     = indiv_rewards.mean(axis=1, keepdims=True)  # (n_envs, 1)
+                indiv_rewards = rewards[:, :n_left]
+                team_mean     = indiv_rewards.mean(axis=1, keepdims=True)
                 mixed_rewards = (1.0 - team_reward_ratio) * indiv_rewards + team_reward_ratio * team_mean
                 mixed_rewards[done_timeout] += draw_penalty
-                # Flatten to interleaved layout [e0p0, e0p1, e1p0, e1p1, ...]
                 team_rewards_rep = mixed_rewards.reshape(-1)
                 done_ppo_rep     = np.repeat(done_ppo, n_left)
-                # Repeat critic states and values for remember_batch
-                critic_rep_t = critic_t.repeat_interleave(n_left, dim=0)  # (n_envs*n_left, critic_dim)
-                values_rep_t = values_t.repeat_interleave(n_left)          # (n_envs*n_left,)
+                critic_rep_t = critic_t.repeat_interleave(n_left, dim=0)
+                values_rep_t = values_t.repeat_interleave(n_left)
 
                 model.remember_batch(left_t, critic_rep_t, logprobs_t, actions_t, values_rep_t,
                                      team_rewards_rep, done_ppo_rep)
                 period_reward  += float(team_rewards_rep.sum())
                 transition_count += n_envs * n_left
 
-                # Per-env loop only for events
                 reset_actions = np.zeros((n_envs, n_players), dtype=np.int32)
                 for i in np.where(dones | done_timeout)[0]:
                     done_goal_i    = bool(dones[i])
@@ -1209,7 +1167,6 @@ def team_training(
                 done_timeout = step_in_game >= max_steps_per_game
                 done_ppo = done or done_timeout
 
-                # Mixed reward: (1-ratio)*individual + ratio*team_mean
                 left_rewards = [float(rews[pid]) if hasattr(env.engine, 'full_step') else step_rewards[pid] for pid in range(n_left)]
                 team_mean = sum(left_rewards) / n_left
                 mixed_rewards = [
@@ -1232,13 +1189,11 @@ def team_training(
                     actor_states = [env.getState(pid) for pid in range(n_left)]
                     opp_states = [env.getState(pid) for pid in range(n_left, n_players)]
 
-                # Goal: reset positions, keep scores, continue match
                 if done and not done_timeout:
                     env.reset_after_goal()
                     actor_states = [env.getState(pid) for pid in range(n_left)]
                     opp_states = [env.getState(pid) for pid in range(n_left, n_players)]
 
-                # Timeout: end of match, record stats, full reset
                 if done_timeout:
                     score = env.engine._score if hasattr(env.engine, '_score') else env.score
                     gf = int(score[0])

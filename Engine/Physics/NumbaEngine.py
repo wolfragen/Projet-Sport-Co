@@ -119,7 +119,7 @@ class NumbaEngine(PhysicsEngine):
         self._actions_buf = np.zeros(n_players, dtype=np.int32)
         self._prev_score_buf = np.zeros(2, dtype=np.float64)
         self._vision_buf = np.zeros((n_players, Settings.ENTRY_NEURONS), dtype=np.float32)
-        gv_size = 4 + n_players * 5
+        gv_size = 6 + n_players * 5
         self._global_vision_buf = np.zeros(gv_size, dtype=np.float32)
         self._rewards_buf = np.zeros(n_players, dtype=np.float64)
         self._reward_coeffs = np.full(11, np.nan, dtype=np.float64)

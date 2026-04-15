@@ -80,7 +80,7 @@ class VectorizedEnv:
         NP = self.n_players
         EN = Settings.ENTRY_NEURONS
         self.vision_buf = np.zeros((B, NP, EN), dtype=np.float32)
-        self.global_vision_buf = np.zeros((B, 4 + NP * 5), dtype=np.float32)
+        self.global_vision_buf = np.zeros((B, 6 + NP * 5), dtype=np.float32)
         self.rewards_buf = np.zeros((B, NP), dtype=np.float64)
         self.done_buf = np.zeros(B, dtype=np.bool_)
         self.actions_buf = np.zeros((B, NP), dtype=np.int32)

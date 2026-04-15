@@ -121,9 +121,8 @@ def getVision(engine, player_id, left_goal_position, right_goal_position, phanto
         insert_index = 10
         n_players = engine.get_n_players()
 
-        # Teammates first, then opponents — ensures left/right symmetry.
-        # Without this, the teammate's slot index depends on player_id, breaking
-        # the shared policy across left/right teams.
+        # Teammates first, then opponents — keeps the slot index of teammates
+        # constant across players for the shared policy.
         for pass_teammates in (True, False):
             for other_id in range(n_players):
                 if other_id == player_id:
@@ -147,10 +146,18 @@ def getVision(engine, player_id, left_goal_position, right_goal_position, phanto
                 )
                 insert_index += 2
 
-                # Team flag for team training (>2 players)
                 if n_players > 2:
                     vision_array[insert_index] = 1.0 if other_is_teammate else -1.0
                     insert_index += 1
+
+        score = engine._score if hasattr(engine, "_score") else (0.0, 0.0)
+        score_left, score_right = float(score[0]), float(score[1])
+        if left_team:
+            my_s, opp_s = score_left, score_right
+        else:
+            my_s, opp_s = score_right, score_left
+        vision_array[insert_index]     = my_s / 10.0
+        vision_array[insert_index + 1] = opp_s / 10.0
 
     return vision_array
 
@@ -182,5 +189,9 @@ def getGlobalVision(engine, left_goal_position, right_goal_position, phantom_pla
             math.cos(a),
             1.0 if lt else -1.0
         ])
+
+    score = engine._score if hasattr(engine, "_score") else (0.0, 0.0)
+    vision.append(float(score[0]) / 10.0)
+    vision.append(float(score[1]) / 10.0)
 
     return np.asarray(vision, dtype=np.float32)
